@@ -1,0 +1,170 @@
+import time
+import logging
+from datetime import datetime, timedelta
+from typing import Optional, Callable
+from dataclasses import dataclass
+from .scorekeeper import GameSchedule, ScoreKeeper
+
+log = logging.getLogger(__name__)
+
+
+@dataclass
+class SchedulerConfig:
+    team_abbr: str = "WSH"
+    check_interval: float = 0.5  # seconds during live game
+    daily_check_hour: int = 8  # hour to check for games (24-hour format)
+    pre_game_wake_minutes: int = 5  # minutes before game to wake up
+    api_timeout: int = 10  # seconds for API timeouts
+    max_retries: int = 3  # retry attempts for API calls
+
+
+class HockeySeasonDetector:
+    @staticmethod
+    def is_hockey_season(date: datetime = None) -> bool:
+        if date is None:
+            date = datetime.now()
+        
+        year = date.year
+        month = date.month
+        
+        # NHL season typically runs from October to June
+        # Pre-season starts in September, regular season October-April, playoffs May-June
+        if month >= 10 or month <= 6:
+            return True
+        elif month == 9:
+            # September - assume pre-season starts around mid-September
+            return date.day >= 15
+        else:
+            return False
+
+
+class StickCheckScheduler:
+    def __init__(self, config: SchedulerConfig = None):
+        self.config = config or SchedulerConfig()
+        self.game_schedule: Optional[GameSchedule] = None
+        self.scorekeeper: Optional[ScoreKeeper] = None
+        self.running = False
+        
+    def _sleep_until_time(self, target_time: datetime) -> None:
+        now = datetime.now()
+        if target_time > now:
+            sleep_seconds = (target_time - now).total_seconds()
+            log.info(f"Sleeping for {sleep_seconds:.0f} seconds until {target_time.strftime('%Y-%m-%d %H:%M:%S')}")
+            time.sleep(sleep_seconds)
+    
+    def _sleep_until_daily_check(self) -> None:
+        now = datetime.now()
+        target_time = now.replace(
+            hour=self.config.daily_check_hour,
+            minute=0,
+            second=0,
+            microsecond=0
+        )
+        
+        # If target time has passed today, set it for tomorrow
+        if target_time <= now:
+            target_time += timedelta(days=1)
+        
+        self._sleep_until_time(target_time)
+    
+    def _sleep_until_game_start(self) -> None:
+        if not self.game_schedule or not self.game_schedule.my_game_today:
+            return
+        
+        game_start = datetime.fromtimestamp(self.game_schedule.my_game_today.scheduled_timestamp)
+        now = datetime.now()
+        
+        # Wake up configured minutes before game start
+        wake_time = game_start - timedelta(minutes=self.config.pre_game_wake_minutes)
+        
+        if wake_time > now:
+            self._sleep_until_time(wake_time)
+    
+    def _setup_today_game(self) -> bool:
+        for attempt in range(self.config.max_retries):
+            try:
+                self.game_schedule = GameSchedule(self.config.team_abbr)
+                if self.game_schedule.my_game_today:
+                    self.scorekeeper = ScoreKeeper(self.game_schedule.my_game_today)
+                    game = self.game_schedule.my_game_today
+                    game_time = datetime.fromtimestamp(game.scheduled_timestamp).strftime('%I:%M %p')
+                    log.info(f"Found game today: {game.away_team} vs {game.home_team} at {game_time}")
+                    return True
+                else:
+                    log.info(f"No game for {self.config.team_abbr} today")
+                    return False
+            except ValueError as e:
+                log.info(f"No games today: {e}")
+                return False
+            except Exception as e:
+                if attempt < self.config.max_retries - 1:
+                    log.warning(f"Attempt {attempt + 1} failed, retrying: {e}")
+                    time.sleep(2 ** attempt)  # Exponential backoff
+                else:
+                    log.error(f"Error setting up today's game after {self.config.max_retries} attempts: {e}")
+                    return False
+        return False
+    
+    def _monitor_live_game(self) -> None:
+        if not self.scorekeeper:
+            return
+        
+        log.info("Starting live game monitoring")
+        goals_detected = 0
+        
+        while self.running and self.scorekeeper.is_in_play():
+            if self.scorekeeper.did_we_score():
+                goals_detected += 1
+                game = self.scorekeeper.my_game
+                log.info(f"GOAL! {game.away_team} {game.home_team} - Goal #{goals_detected}")
+                # Here you could add Bluetooth notification logic
+            else:
+                log.debug("No goals yet")
+            
+            time.sleep(self.config.check_interval)
+        
+        if goals_detected > 0:
+            log.info(f"Game monitoring complete. Detected {goals_detected} goals!")
+        else:
+            log.info("Game monitoring complete. No goals detected.")
+    
+    def run_daily_cycle(self) -> None:
+        if not HockeySeasonDetector.is_hockey_season():
+            log.info("Not hockey season - sleeping until tomorrow")
+            self._sleep_until_daily_check()
+            return
+        
+        log.info("Starting daily check for games")
+        
+        if self._setup_today_game():
+            # Game found today
+            self._sleep_until_game_start()
+            
+            # Check if game is now in progress
+            if self.scorekeeper and self.scorekeeper.is_in_play():
+                self._monitor_live_game()
+            else:
+                log.info("Game not in progress or already finished")
+        else:
+            # No game today, sleep until tomorrow
+            log.info("No game to monitor today")
+            self._sleep_until_daily_check()
+    
+    def start(self) -> None:
+        log.info(f"Starting StickCheck scheduler for team: {self.config.team_abbr}")
+        self.running = True
+        
+        try:
+            while self.running:
+                self.run_daily_cycle()
+        except KeyboardInterrupt:
+            log.info("Scheduler stopped by user")
+        except Exception as e:
+            log.error(f"Scheduler error: {e}")
+        finally:
+            self.running = False
+            log.info("Scheduler stopped")
+    
+    def stop(self) -> None:
+        log.info("Stopping scheduler...")
+        self.running = False
