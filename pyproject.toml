@@ -6,12 +6,23 @@ authors = [
     {name = "Matt B",email = "calicojack@gmail.com"}
 ]
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.9"
 dependencies = [
     "nhlpy",
     "python-dateutil",
     "pyserial",
+]
+
+[project.optional-dependencies]
+rpi = [
     "RPi.GPIO",
 ]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov",
+]
+
+[tool.setuptools.packages.find]
+include = ["StickCheck*"]
 
 
