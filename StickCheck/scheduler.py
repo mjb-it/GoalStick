@@ -4,18 +4,30 @@ from datetime import datetime, timedelta
 from typing import Optional, Callable
 from dataclasses import dataclass
 from .scorekeeper import GameSchedule, ScoreKeeper
+from .led_controller import LEDController, LEDConfig
+from .config_store import ConfigStore, UserConfig
 
 log = logging.getLogger(__name__)
 
 
 @dataclass
 class SchedulerConfig:
-    team_abbr: str = "WSH"
+    team_abbr: str = None  # If None, will load from persistent config
     check_interval: float = 0.5  # seconds during live game
     daily_check_hour: int = 8  # hour to check for games (24-hour format)
     pre_game_wake_minutes: int = 5  # minutes before game to wake up
     api_timeout: int = 10  # seconds for API timeouts
     max_retries: int = 3  # retry attempts for API calls
+    # LED controller settings
+    serial_port: str = "/dev/serial0"  # Default UART on Raspberry Pi
+    serial_baud_rate: int = 115200
+    team_colors_path: str = None  # Path to team_colors.json, None for default
+    # Bluetooth settings
+    bluetooth_device_name: str = "GoalStick"
+    bluetooth_pairing_timeout: int = 180  # 3 minutes
+    # Button settings
+    pairing_button_pin: int = 17  # BCM GPIO pin for pairing button
+    pairing_button_hold_time: float = 3.0  # Seconds to hold for pairing
 
 
 class HockeySeasonDetector:
@@ -44,6 +56,35 @@ class StickCheckScheduler:
         self.game_schedule: Optional[GameSchedule] = None
         self.scorekeeper: Optional[ScoreKeeper] = None
         self.running = False
+        
+        # Initialize persistent config store
+        self.config_store = ConfigStore()
+        
+        # Load team from persistent storage if not specified
+        if self.config.team_abbr is None:
+            self.config.team_abbr = self.config_store.get_team()
+            log.info(f"Loaded team from persistent config: {self.config.team_abbr}")
+        
+        # Initialize LED controller
+        led_config = LEDConfig(
+            serial_port=self.config.serial_port,
+            baud_rate=self.config.serial_baud_rate
+        )
+        self.led_controller = LEDController(
+            config=led_config,
+            team_colors_path=self.config.team_colors_path
+        )
+    
+    def set_team(self, team_abbr: str) -> bool:
+        team_abbr = team_abbr.upper()
+        if self.config_store.set_team(team_abbr):
+            self.config.team_abbr = team_abbr
+            log.info(f"Team updated to: {team_abbr}")
+            return True
+        return False
+    
+    def get_team(self) -> str:
+        return self.config.team_abbr
         
     def _sleep_until_time(self, target_time: datetime) -> None:
         now = datetime.now()
@@ -112,16 +153,27 @@ class StickCheckScheduler:
         log.info("Starting live game monitoring")
         goals_detected = 0
         
-        while self.running and self.scorekeeper.is_in_play():
-            if self.scorekeeper.did_we_score():
-                goals_detected += 1
-                game = self.scorekeeper.my_game
-                log.info(f"GOAL! {game.away_team} {game.home_team} - Goal #{goals_detected}")
-                # Here you could add Bluetooth notification logic
-            else:
-                log.debug("No goals yet")
-            
-            time.sleep(self.config.check_interval)
+        # Connect to ESP32 LED controller
+        if not self.led_controller.connect():
+            log.warning("Could not connect to LED controller, continuing without lights")
+        
+        try:
+            while self.running and self.scorekeeper.is_in_play():
+                if self.scorekeeper.did_we_score():
+                    goals_detected += 1
+                    game = self.scorekeeper.my_game
+                    log.info(f"GOAL! {game.away_team} vs {game.home_team} - Goal #{goals_detected}")
+                    
+                    # Trigger LED celebration
+                    self.led_controller.celebrate(self.config.team_abbr)
+                else:
+                    log.debug("No goals yet")
+                
+                time.sleep(self.config.check_interval)
+        finally:
+            # Clean up LED controller
+            self.led_controller.idle()
+            self.led_controller.disconnect()
         
         if goals_detected > 0:
             log.info(f"Game monitoring complete. Detected {goals_detected} goals!")
