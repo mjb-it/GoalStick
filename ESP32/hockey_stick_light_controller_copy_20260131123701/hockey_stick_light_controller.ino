@@ -42,6 +42,10 @@ void loop() {
     } else if (input == "I") {
       Serial.println("Received idle command");
       stopCelebration();
+    } else if (input == "P") {
+      // Ping/health check - respond with "PONG"
+      Serial.println("Received ping");
+      Serial2.println("PONG");
     }
   }
 

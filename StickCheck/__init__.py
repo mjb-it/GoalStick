@@ -4,6 +4,7 @@ from .led_controller import LEDController, LEDConfig
 from .config_store import ConfigStore, UserConfig
 from .bluetooth_pairing import BluetoothPairing, BluetoothConfig, PairingStatus
 from .button_handler import ButtonHandler, ButtonConfig, ButtonState
+from .esp32_reset import ESP32Reset, ResetConfig
 
 __all__ = [
     "GameSchedule",
@@ -20,5 +21,7 @@ __all__ = [
     "PairingStatus",
     "ButtonHandler",
     "ButtonConfig",
-    "ButtonState"
+    "ButtonState",
+    "ESP32Reset",
+    "ResetConfig"
 ]

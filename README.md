@@ -83,6 +83,8 @@ python main.py --pair
 | `bluetooth_pairing_timeout` | int | 180 | Pairing timeout in seconds (3 minutes) |
 | `pairing_button_pin` | int | 17 | BCM GPIO pin for pairing button |
 | `pairing_button_hold_time` | float | 3.0 | Seconds to hold button for pairing |
+| `esp32_reset_pin` | int | 27 | BCM GPIO pin connected to ESP32 EN |
+| `esp32_reset_retries` | int | 2 | Reset attempts before giving up |
 
 ## NHL Team Abbreviations
 
@@ -137,6 +139,7 @@ Log levels:
 | Raspberry Pi | ESP32 | Purpose |
 |--------------|-------|----------|
 | GPIO 14 (TX) | GPIO 16 (RX2) | Serial data |
+| GPIO 27 | EN | ESP32 reset (optional) |
 | GND | GND | Common ground |
 
 ### Pairing Button Wiring

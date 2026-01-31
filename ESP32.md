@@ -36,6 +36,7 @@ The ESP32 listens on **Hardware Serial 2** (mapped to GPIO 16\) with the followi
 | :---- | :---- | :---- |
 | **Celebration** | `C:RRGGBB,RRGGBB...` | Triggers the goal animation using the provided hex colors. |
 | **Idle** | `I` | Stops any current animation and clears the strip. |
+| **Ping** | `P` | Health check. ESP32 responds with `PONG\\n`. |
 
 Export to Sheets
 

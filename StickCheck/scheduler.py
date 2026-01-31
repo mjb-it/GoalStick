@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from .scorekeeper import GameSchedule, ScoreKeeper
 from .led_controller import LEDController, LEDConfig
 from .config_store import ConfigStore, UserConfig
+from .esp32_reset import ESP32Reset, ResetConfig
 
 log = logging.getLogger(__name__)
 
@@ -28,6 +29,9 @@ class SchedulerConfig:
     # Button settings
     pairing_button_pin: int = 17  # BCM GPIO pin for pairing button
     pairing_button_hold_time: float = 3.0  # Seconds to hold for pairing
+    # ESP32 reset settings
+    esp32_reset_pin: int = 27  # BCM GPIO pin connected to ESP32 EN pin
+    esp32_reset_retries: int = 2  # Number of reset attempts before giving up
 
 
 class HockeySeasonDetector:
@@ -74,6 +78,10 @@ class StickCheckScheduler:
             config=led_config,
             team_colors_path=self.config.team_colors_path
         )
+        
+        # Initialize ESP32 reset controller
+        reset_config = ResetConfig(reset_pin=self.config.esp32_reset_pin)
+        self.esp32_reset = ESP32Reset(config=reset_config)
     
     def set_team(self, team_abbr: str) -> bool:
         team_abbr = team_abbr.upper()
@@ -146,6 +154,40 @@ class StickCheckScheduler:
                     return False
         return False
     
+    def _check_esp32_health(self) -> bool:
+        log.info("Performing ESP32 health check...")
+        
+        if not self.led_controller.connect():
+            log.error("Could not connect to ESP32")
+            return False
+        
+        if self.led_controller.ping():
+            log.info("ESP32 is responsive and ready")
+            return True
+        else:
+            log.warning("ESP32 did not respond to ping")
+            return False
+    
+    def _ensure_esp32_ready(self) -> bool:
+        for attempt in range(self.config.esp32_reset_retries + 1):
+            if self._check_esp32_health():
+                return True
+            
+            if attempt < self.config.esp32_reset_retries:
+                log.warning(f"ESP32 health check failed, attempting reset ({attempt + 1}/{self.config.esp32_reset_retries})...")
+                
+                # Disconnect serial before reset
+                self.led_controller.disconnect()
+                
+                # Reset ESP32
+                if self.esp32_reset.reset():
+                    log.info("ESP32 reset complete, retrying health check...")
+                else:
+                    log.error("ESP32 reset failed")
+        
+        log.error("ESP32 could not be recovered after reset attempts")
+        return False
+    
     def _monitor_live_game(self) -> None:
         if not self.scorekeeper:
             return
@@ -153,9 +195,9 @@ class StickCheckScheduler:
         log.info("Starting live game monitoring")
         goals_detected = 0
         
-        # Connect to ESP32 LED controller
-        if not self.led_controller.connect():
-            log.warning("Could not connect to LED controller, continuing without lights")
+        # Health check ESP32 before game monitoring, reset if needed
+        if not self._ensure_esp32_ready():
+            log.warning("ESP32 not available, continuing without lights")
         
         try:
             while self.running and self.scorekeeper.is_in_play():

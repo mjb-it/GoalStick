@@ -106,6 +106,42 @@ class LEDController:
         log.info("Sending idle command to ESP32")
         return self._send_command("I")
     
+    def ping(self, timeout: float = 2.0) -> bool:
+        if not self.is_connected():
+            log.warning("Not connected to ESP32, attempting to connect...")
+            if not self.connect():
+                return False
+        
+        try:
+            # Clear any pending data in buffer
+            self._serial.reset_input_buffer()
+            
+            # Send ping command
+            self._serial.write(b"P\n")
+            self._serial.flush()
+            
+            # Wait for PONG response
+            original_timeout = self._serial.timeout
+            self._serial.timeout = timeout
+            
+            try:
+                response = self._serial.readline().decode('utf-8').strip()
+                if response == "PONG":
+                    log.info("ESP32 health check passed")
+                    return True
+                else:
+                    log.warning(f"ESP32 unexpected response: {response}")
+                    return False
+            finally:
+                self._serial.timeout = original_timeout
+                
+        except serial.SerialException as e:
+            log.error(f"ESP32 health check failed: {e}")
+            return False
+        except Exception as e:
+            log.error(f"ESP32 health check error: {e}")
+            return False
+    
     def __enter__(self):
         self.connect()
         return self
