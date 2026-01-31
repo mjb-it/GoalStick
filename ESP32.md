@@ -10,15 +10,15 @@ This firmware transforms the ESP32 into a dedicated serial-controlled LED driver
 | :---- | :---- | :---- | :---- |
 | **VIN** | 5V | External 5V (+) | Power input (Shared with Pi/Strip) |
 | **GND** | GND | External 5V (-) | **Common Ground** (Required) |
-| **GPIO 16** | RX2 | Data Resistor | Data Signal to LED Strip |
-| **GPIO 16** | RX2 | Pi TX (GPIO 14\) | Serial Command Input |
+| **GPIO 4** | D4 | LED Data In (via 470Ω) | Data Signal to LED Strip |
+| **GPIO 16** | RX2 | Pi TX (GPIO 14) | Serial Command Input |
 
 Export to Sheets
 
 ### **Hardware Protection**
 
 * **1000µF Capacitor:** Must be placed across the 5V/GND rails near the power input.  
-* **470Ω Resistor:** Must be placed in-line between GPIO 16 and the LED `Data In` pad.  
+* **470Ω Resistor:** Must be placed in-line between GPIO 4 and the LED `Data In` pad.  
 * **Logic Level Shifter:** Recommended (74AHCT125) to boost 3.3V logic to 5V for reliable signal over long distances.
 
 ## **2\. Serial Protocol Specification**

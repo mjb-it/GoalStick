@@ -150,14 +150,14 @@ The button uses the internal pull-up resistor, so no external resistor is needed
 
 | ESP32 | LED Strip | Purpose |
 |-------|-----------|----------|
-| GPIO 16 | Data In (via 470Ω resistor) | LED control signal |
+| GPIO 4 | Data In (via 470Ω resistor) | LED control signal |
 | VIN | 5V | Power |
 | GND | GND | Ground |
 
 ### Hardware Protection
 
 - **1000µF Capacitor**: Place across 5V/GND rails near power input
-- **470Ω Resistor**: In-line between ESP32 GPIO 16 and LED Data In
+- **470Ω Resistor**: In-line between ESP32 GPIO 4 and LED Data In
 - **Logic Level Shifter** (optional): 74AHCT125 to boost 3.3V to 5V for long cable runs
 
 ### Raspberry Pi UART Setup
