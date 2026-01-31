@@ -14,7 +14,7 @@ class TestSchedulerConfig:
         config = SchedulerConfig()
         
         assert config.team_abbr is None
-        assert config.check_interval == 0.5
+        assert config.check_interval == 2.0
         assert config.daily_check_hour == 8
         assert config.pre_game_wake_minutes == 5
         assert config.api_timeout == 10

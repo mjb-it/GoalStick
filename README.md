@@ -71,7 +71,7 @@ python main.py --pair
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `team_abbr` | str | "WSH" | NHL team abbreviation (e.g., "TOR", "NYR", "CHI") |
-| `check_interval` | float | 0.5 | Seconds between goal checks during live games |
+| `check_interval` | float | 2.0 | Seconds between goal checks during live games |
 | `daily_check_hour` | int | 8 | Hour (24-hour format) to check daily schedule |
 | `pre_game_wake_minutes` | int | 5 | Minutes before game to wake up |
 | `api_timeout` | int | 10 | API request timeout in seconds |

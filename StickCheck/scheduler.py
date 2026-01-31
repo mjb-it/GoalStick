@@ -14,7 +14,7 @@ log = logging.getLogger(__name__)
 @dataclass
 class SchedulerConfig:
     team_abbr: str = None  # If None, will load from persistent config
-    check_interval: float = 0.5  # seconds during live game
+    check_interval: float = 2.0  # seconds during live game
     daily_check_hour: int = 8  # hour to check for games (24-hour format)
     pre_game_wake_minutes: int = 5  # minutes before game to wake up
     api_timeout: int = 10  # seconds for API timeouts
