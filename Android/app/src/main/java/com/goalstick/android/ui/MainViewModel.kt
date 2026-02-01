@@ -41,6 +41,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _errorMessage.value = null
     }
     
+    fun sendTestGoal() {
+        viewModelScope.launch {
+            val success = bluetoothManager.sendTestGoal()
+            if (success) {
+                _errorMessage.value = null
+            } else {
+                _errorMessage.value = "Failed to send test goal"
+            }
+        }
+    }
+    
     override fun onCleared() {
         super.onCleared()
         bluetoothManager.disconnect()

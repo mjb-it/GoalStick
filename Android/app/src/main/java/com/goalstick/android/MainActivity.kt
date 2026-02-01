@@ -49,6 +49,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var wifiPasswordInput: TextInputEditText
     private lateinit var teamSpinner: Spinner
     private lateinit var sendConfigButton: Button
+    private lateinit var testGoalButton: Button
     private lateinit var configProgressBar: ProgressBar
     
     private val bluetoothReceiver = object : BroadcastReceiver() {
@@ -103,10 +104,12 @@ class MainActivity : AppCompatActivity() {
         wifiPasswordInput = findViewById(R.id.wifiPasswordInput)
         teamSpinner = findViewById(R.id.teamSpinner)
         sendConfigButton = findViewById(R.id.sendConfigButton)
+        testGoalButton = findViewById(R.id.testGoalButton)
         configProgressBar = findViewById(R.id.configProgressBar)
         
         scanButton.setOnClickListener { checkPermissionsAndScan() }
         sendConfigButton.setOnClickListener { sendConfiguration() }
+        testGoalButton.setOnClickListener { sendTestGoal() }
     }
     
     private fun setupRecyclerView() {
@@ -146,6 +149,7 @@ class MainActivity : AppCompatActivity() {
                         devicesRecyclerView.visibility = View.GONE
                         configLayout.visibility = View.VISIBLE
                         sendConfigButton.isEnabled = true
+                        testGoalButton.isEnabled = true
                     }
                     is BluetoothManager.ConnectionState.Error -> {
                         statusText.text = "Error: ${state.message}"
@@ -237,6 +241,11 @@ class MainActivity : AppCompatActivity() {
         configProgressBar.visibility = View.VISIBLE
         sendConfigButton.isEnabled = false
         viewModel.sendConfiguration(ssid, password, teamAbbr)
+    }
+    
+    private fun sendTestGoal() {
+        Toast.makeText(this, "Sending test goal...", Toast.LENGTH_SHORT).show()
+        viewModel.sendTestGoal()
     }
     
     private fun registerBluetoothReceiver() {

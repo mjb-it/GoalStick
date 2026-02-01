@@ -130,6 +130,28 @@
                 android:text="Send Configuration"
                 android:enabled="false" />
 
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@android:color/darker_gray"
+                android:layout_marginVertical="24dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Test"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="16dp" />
+
+            <Button
+                android:id="@+id/testGoalButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="🚨 Test Goal Celebration"
+                android:backgroundTint="#C8102E"
+                android:enabled="false" />
+
             <ProgressBar
                 android:id="@+id/configProgressBar"
                 android:layout_width="wrap_content"

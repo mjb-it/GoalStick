@@ -151,6 +151,32 @@ class BluetoothManager(private val context: Context) {
         }
     }
     
+    suspend fun sendTestGoal(): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val json = JSONObject().apply {
+                put("type", "test_goal")
+            }
+            
+            outputStream?.write(json.toString().toByteArray())
+            outputStream?.flush()
+            
+            // Wait for acknowledgment
+            val buffer = ByteArray(1024)
+            val bytesRead = inputStream?.read(buffer) ?: -1
+            
+            if (bytesRead > 0) {
+                val response = String(buffer, 0, bytesRead)
+                val responseJson = JSONObject(response)
+                responseJson.getString("status") == "ok"
+            } else {
+                false
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to send test goal", e)
+            false
+        }
+    }
+    
     fun disconnect() {
         try {
             inputStream?.close()

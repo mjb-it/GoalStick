@@ -159,7 +159,7 @@ class BluetoothServer:
                 # Show cyan LED - connected, waiting for data
                 self._send_led_status(["00FFFF"])
                 
-                # Receive configuration data
+                # Receive and process messages
                 self._client_socket.settimeout(30)  # 30 second timeout for data
                 data = b""
                 while self._running:
@@ -171,25 +171,42 @@ class BluetoothServer:
                         
                         # Try to parse JSON
                         try:
-                            config_json = json.loads(data.decode('utf-8'))
-                            received_config = self._process_config(config_json)
-                            if received_config:
-                                # Send acknowledgment
+                            message_json = json.loads(data.decode('utf-8'))
+                            data = b""  # Reset buffer after successful parse
+                            
+                            msg_type = message_json.get("type")
+                            
+                            if msg_type == "test_goal":
+                                # Handle test goal - trigger celebration and continue
+                                self._trigger_test_goal()
                                 response = json.dumps({"status": "ok"})
                                 self._client_socket.send(response.encode('utf-8'))
+                                continue  # Keep listening for more commands
+                            
+                            elif msg_type == "config":
+                                # Handle config - process and return
+                                received_config = self._process_config(message_json)
+                                if received_config:
+                                    response = json.dumps({"status": "ok"})
+                                    self._client_socket.send(response.encode('utf-8'))
+                                    
+                                    # Show green LED - success
+                                    self._send_led_status(["00FF00"])
+                                    
+                                    if self._on_config_received:
+                                        self._on_config_received(received_config)
+                                    
+                                    return received_config
+                            else:
+                                log.warning(f"Unknown message type: {msg_type}")
+                                response = json.dumps({"status": "error", "message": "unknown type"})
+                                self._client_socket.send(response.encode('utf-8'))
                                 
-                                # Show green LED - success
-                                self._send_led_status(["00FF00"])
-                                
-                                if self._on_config_received:
-                                    self._on_config_received(received_config)
-                                
-                                return received_config
                         except json.JSONDecodeError:
                             # Not complete JSON yet, keep reading
                             continue
                     except socket.timeout:
-                        log.warning("Timeout waiting for configuration data")
+                        log.warning("Timeout waiting for data")
                         break
                 
             except socket.timeout:
@@ -203,6 +220,26 @@ class BluetoothServer:
             return None
         finally:
             self._cleanup()
+    
+    def _process_message(self, message_json: dict) -> bool:
+        """Process received message. Returns True if should continue listening."""
+        msg_type = message_json.get("type")
+        
+        if msg_type == "test_goal":
+            log.info("Received test goal command")
+            self._trigger_test_goal()
+            return True  # Continue listening for more commands
+        elif msg_type == "config":
+            return False  # Config handled separately, stop listening
+        else:
+            log.warning(f"Unknown message type: {msg_type}")
+            return True
+    
+    def _trigger_test_goal(self) -> None:
+        """Trigger a test goal celebration."""
+        if self.led_controller:
+            log.info("Triggering test goal celebration!")
+            self.led_controller.celebrate()
     
     def _process_config(self, config_json: dict) -> Optional[ReceivedConfig]:
         """Process received configuration JSON."""
