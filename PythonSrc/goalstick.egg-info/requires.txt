@@ -1,0 +1,10 @@
+nhlpy
+python-dateutil
+pyserial
+
+[dev]
+pytest>=7.0
+pytest-cov
+
+[rpi]
+RPi.GPIO

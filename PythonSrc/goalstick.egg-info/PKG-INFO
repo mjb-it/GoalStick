@@ -1,0 +1,32 @@
+Metadata-Version: 2.4
+Name: goalstick
+Version: 0.1.0
+Author-email: Matt B <calicojack@gmail.com>
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Requires-Dist: nhlpy
+Requires-Dist: python-dateutil
+Requires-Dist: pyserial
+Provides-Extra: rpi
+Requires-Dist: RPi.GPIO; extra == "rpi"
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0; extra == "dev"
+Requires-Dist: pytest-cov; extra == "dev"
+
+# GoalStick Python Service
+
+Python service for monitoring NHL games and triggering LED celebrations on a Raspberry Pi.
+
+See the main [README](../README.md) for full documentation.
+
+## Installation
+
+```bash
+pip install -e ".[dev]"
+```
+
+## Usage
+
+```bash
+python main.py --team WSH
+```
