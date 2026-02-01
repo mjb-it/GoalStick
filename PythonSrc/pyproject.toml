@@ -8,7 +8,7 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
-    "nhlpy",
+    "nhl-api-py>=3.0.0",
     "python-dateutil",
     "pyserial",
 ]
