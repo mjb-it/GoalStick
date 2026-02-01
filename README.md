@@ -1,27 +1,33 @@
 # GoalStick
 
-A Python service that monitors NHL games and triggers celebratory LED light shows when your favorite team scores. Designed to run on a Raspberry Pi Zero 2 W with an ESP32-controlled LED strip.
+An NHL goal celebration system that triggers LED light shows when your favorite team scores. The system consists of three components:
 
-## Features
-
-- **Automated Scheduling**: Runs daily during hockey season (October-June)
-- **Smart Sleep Management**: Wakes up 5 minutes before game start
-- **Real-time Goal Detection**: Checks every 0.5 seconds during live games
-- **LED Light Show**: Triggers team-colored celebrations on WS2812B LED strips via ESP32
-- **Team Customization**: Monitor any NHL team with pre-configured team colors
-- **IoT Optimized**: No system dependencies like cron required
-- **Graceful Shutdown**: Clean signal handling for embedded devices
+- **Raspberry Pi Service** (Python) - Monitors NHL games and detects goals
+- **Android App** (Kotlin) - Companion app for configuration via Bluetooth
+- **ESP32 Firmware** (Arduino/C++) - Controls WS2812B LED strip animations
 
 ## Repository Structure
 
 ```
 GoalStick/
+├── PythonSrc/       # Raspberry Pi Python service
 ├── Android/         # Android companion app
 ├── ESP32/           # ESP32 LED controller firmware
-├── PythonSrc/       # Raspberry Pi Python service
 ├── Makefile         # Build and test automation
 └── README.md
 ```
+
+---
+
+# Raspberry Pi Service (Python)
+
+The core service that monitors NHL games and communicates with the ESP32 to trigger celebrations.
+
+## Requirements
+
+- Raspberry Pi Zero 2 W (or any Pi with GPIO)
+- Python 3.9+
+- Serial connection to ESP32
 
 ## Installation
 
@@ -30,41 +36,16 @@ cd PythonSrc
 pip install -e .
 ```
 
-## Quick Start
-
-### Basic Usage
-
-```python
-from StickCheck import StickCheckScheduler, SchedulerConfig
-
-# Use default configuration (Washington Capitals)
-scheduler = StickCheckScheduler()
-scheduler.start()
+Or using Make:
+```bash
+make python-install
 ```
 
-### Custom Configuration
-
-```python
-from StickCheck import StickCheckScheduler, SchedulerConfig
-
-config = SchedulerConfig(
-    team_abbr="TOR",           # Monitor Toronto Maple Leafs
-    check_interval=0.5,        # Check every 0.5 seconds during games
-    daily_check_hour=9,        # Check for games at 9 AM daily
-    pre_game_wake_minutes=10,  # Wake up 10 minutes before game
-    api_timeout=10,            # API timeout in seconds
-    max_retries=3,             # Retry failed API calls 3 times
-    serial_port="/dev/serial0", # UART port for ESP32 communication
-    serial_baud_rate=115200    # Baud rate for serial communication
-)
-
-scheduler = StickCheckScheduler(config)
-scheduler.start()
-```
-
-### Command Line Usage
+## Usage
 
 ```bash
+cd PythonSrc
+
 # Start the goal monitoring service
 python main.py
 
@@ -78,216 +59,225 @@ python main.py --show-team
 python main.py --pair
 ```
 
+## Testing
+
+```bash
+# Run unit tests (69 tests)
+make python-test
+
+# Run with coverage report
+make python-test-cov
+```
+
 ## Configuration Options
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `team_abbr` | str | "WSH" | NHL team abbreviation (e.g., "TOR", "NYR", "CHI") |
+| `team_abbr` | str | "WSH" | NHL team abbreviation |
 | `check_interval` | float | 2.0 | Seconds between goal checks during live games |
 | `daily_check_hour` | int | 8 | Hour (24-hour format) to check daily schedule |
 | `pre_game_wake_minutes` | int | 5 | Minutes before game to wake up |
-| `api_timeout` | int | 10 | API request timeout in seconds |
-| `max_retries` | int | 3 | Maximum retry attempts for API failures |
 | `serial_port` | str | "/dev/serial0" | Serial port for ESP32 communication |
 | `serial_baud_rate` | int | 115200 | Baud rate for serial communication |
-| `team_colors_path` | str | None | Path to team_colors.json (None for default) |
-| `bluetooth_device_name` | str | "GoalStick" | Bluetooth device name for pairing |
-| `bluetooth_pairing_timeout` | int | 180 | Pairing timeout in seconds (3 minutes) |
 | `pairing_button_pin` | int | 17 | BCM GPIO pin for pairing button |
-| `pairing_button_hold_time` | float | 3.0 | Seconds to hold button for pairing |
 | `esp32_reset_pin` | int | 27 | BCM GPIO pin connected to ESP32 EN |
-| `esp32_reset_retries` | int | 2 | Reset attempts before giving up |
 
-## NHL Team Abbreviations
+## Dependencies
 
-Common abbreviations include:
-- Eastern Conference: BOS, BUF, CBJ, CAR, DET, FLA, MTL, NJD, NYI, NYR, OTT, PHI, PIT, TBL, TOR, WSH
-- Western Conference: ANA, ARI, CGY, CHI, COL, DAL, EDM, LAK, MIN, NSH, PHI, SJS, STL, VAN, VGK, WPG
+- `nhlpy` - NHL API client
+- `python-dateutil` - Date parsing utilities
+- `pyserial` - Serial communication with ESP32
+- `RPi.GPIO` - GPIO control (optional, for button/reset)
 
-## How It Works
+---
 
-1. **Daily Check**: Service runs once per day during hockey season
-2. **Game Detection**: Checks if your team is playing today
-3. **Smart Sleep**: Sleeps until 5 minutes before game start
-4. **Live Monitoring**: During games, checks every 0.5 seconds for goals
-5. **Off-season**: Automatically sleeps through summer months
+# Android App (Kotlin)
 
-## Architecture
+Companion app for configuring the GoalStick via Bluetooth.
 
-- **GameSchedule**: Handles NHL API integration and schedule parsing
-- **ScoreKeeper**: Monitors live games and detects goals
-- **StickCheckScheduler**: Manages timing and automated execution
-- **HockeySeasonDetector**: Determines if current date is in hockey season
-- **LEDController**: Communicates with ESP32 via serial to trigger LED animations
-- **ConfigStore**: Persists team configuration across reboots
-- **BluetoothPairing**: Handles Bluetooth pairing with Android app
+## Requirements
 
-## Logging
+- Android Studio Hedgehog (2023.1.1) or newer
+- Android SDK 34
+- Java 17 (for command-line builds)
 
-The service provides detailed logging:
-```python
-import logging
-logging.basicConfig(level=logging.INFO)
+## Features
+
+- Bluetooth device discovery and pairing
+- WiFi credential configuration
+- NHL team selection (all 32 teams)
+- Send configuration to Raspberry Pi
+
+## Building
+
+### Using Android Studio (Recommended)
+
+1. Open `Android/` folder in Android Studio
+2. Sync Gradle files
+3. Build → Build Bundle(s) / APK(s) → Build APK(s)
+
+### Using Command Line
+
+```bash
+# Requires Android SDK and Java 17
+make android-build
+
+# APK location:
+# Android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Log levels:
-- `INFO`: Game status, scheduler events
-- `DEBUG`: Detailed goal checking (useful for troubleshooting)
-- `WARNING`: API retry attempts
-- `ERROR`: API failures and critical errors
+### Installing on Device
 
-## Hardware Setup
+```bash
+# With device connected via USB
+make android-install
 
-### Components
+# Or manually:
+adb install Android/app/build/outputs/apk/debug/app-debug.apk
+```
 
-- **Raspberry Pi Zero 2 W**: Runs the GoalStick service
-- **ESP32**: Controls the LED strip via serial commands
-- **WS2812B LED Strip**: 300+ addressable LEDs for the light show
-- **5V Power Supply**: Minimum 2A for testing, more for full LED strip
-- **Momentary Push Button**: For triggering Bluetooth pairing mode
+## Project Structure
 
-### Wiring
+```
+Android/
+├── app/src/main/
+│   ├── java/com/goalstick/android/
+│   │   ├── MainActivity.kt           # Main UI
+│   │   ├── bluetooth/BluetoothManager.kt  # BT connection
+│   │   ├── data/ConfigurationData.kt # Team data
+│   │   └── ui/                        # UI components
+│   ├── res/layout/                    # XML layouts
+│   └── AndroidManifest.xml
+├── build.gradle
+└── settings.gradle
+```
+
+---
+
+# ESP32 Firmware (Arduino)
+
+Controls the WS2812B LED strip and receives commands from the Raspberry Pi.
+
+## Requirements
+
+- ESP32 development board
+- Arduino IDE or PlatformIO
+- FastLED library
+
+## Building
+
+1. Open `ESP32/hockey_stick_light_controller.ino` in Arduino IDE
+2. Install FastLED library (Sketch → Include Library → Manage Libraries)
+3. Select board: ESP32 Dev Module
+4. Upload to ESP32
+
+## Pin Configuration
+
+| Pin | Function |
+|-----|----------|
+| GPIO 4 | LED Data Out |
+| GPIO 16 (RX2) | Serial RX from Raspberry Pi |
+| GPIO 17 (TX2) | Serial TX to Raspberry Pi |
+
+## Serial Protocol
+
+The ESP32 listens on Serial2 at 115200 baud:
+
+| Command | Format | Description |
+|---------|--------|-------------|
+| Celebrate | `C:RRGGBB,RRGGBB,...\n` | Trigger goal animation with hex colors |
+| Idle | `I\n` | Stop animation and clear strip |
+| Ping | `P\n` | Health check, responds with `PONG\n` |
+
+Example: `C:FFFFFF,002D62,E51937\n` (Washington Capitals colors)
+
+---
+
+# Hardware Setup
+
+## Components
+
+- **Raspberry Pi Zero 2 W** - Runs the Python service
+- **ESP32** - Controls LED strip via serial
+- **WS2812B LED Strip** - 300+ addressable LEDs
+- **5V Power Supply** - Minimum 2A (more for full strip)
+- **Momentary Push Button** - For Bluetooth pairing
+
+## Wiring Diagram
+
+### Raspberry Pi ↔ ESP32
 
 | Raspberry Pi | ESP32 | Purpose |
-|--------------|-------|----------|
+|--------------|-------|---------|
 | GPIO 14 (TX) | GPIO 16 (RX2) | Serial data |
 | GPIO 27 | EN | ESP32 reset (optional) |
 | GND | GND | Common ground |
 
-### Pairing Button Wiring
-
-| Raspberry Pi | Button | Purpose |
-|--------------|--------|----------|
-| GPIO 17 | Pin 1 | Button input (uses internal pull-up) |
-| GND | Pin 2 | Ground |
-
-The button uses the internal pull-up resistor, so no external resistor is needed. Press and hold for 3 seconds to enter pairing mode.
+### ESP32 ↔ LED Strip
 
 | ESP32 | LED Strip | Purpose |
-|-------|-----------|----------|
-| GPIO 4 | Data In (via 470Ω resistor) | LED control signal |
+|-------|-----------|---------|
+| GPIO 4 | Data In (via 470Ω resistor) | LED control |
 | VIN | 5V | Power |
 | GND | GND | Ground |
 
-### Hardware Protection
+### Pairing Button
 
-- **1000µF Capacitor**: Place across 5V/GND rails near power input
-- **470Ω Resistor**: In-line between ESP32 GPIO 4 and LED Data In
-- **Logic Level Shifter** (optional): 74AHCT125 to boost 3.3V to 5V for long cable runs
+| Raspberry Pi | Button |
+|--------------|--------|
+| GPIO 17 | Pin 1 (uses internal pull-up) |
+| GND | Pin 2 |
 
-### Raspberry Pi UART Setup
+Press and hold for 3 seconds to enter pairing mode.
 
-Enable UART on the Raspberry Pi:
+## Hardware Protection
 
-```bash
-# Add to /boot/config.txt
-enable_uart=1
+- **1000µF Capacitor** - Across 5V/GND rails near power input
+- **470Ω Resistor** - Between ESP32 GPIO 4 and LED Data In
+- **Logic Level Shifter** (optional) - 74AHCT125 for long cable runs
 
-# Disable serial console (if needed)
-sudo raspi-config
-# Navigate to: Interface Options > Serial Port
-# Login shell: No, Hardware enabled: Yes
-```
+---
 
-### ESP32 Serial Protocol
+# Build System
 
-The ESP32 listens on Hardware Serial 2 at 115200 baud:
-
-| Command | Format | Description |
-|---------|--------|-------------|
-| Celebration | `C:RRGGBB,RRGGBB,...\n` | Trigger goal animation with hex colors |
-| Idle | `I\n` | Stop animation and clear strip |
-
-Example for Washington Capitals: `C:FFFFFF,002D62,E51937\n`
-
-## Bluetooth Pairing
-
-GoalStick supports Bluetooth pairing with an Android app for remote team configuration.
-
-### Entering Pairing Mode
+Use the Makefile for all build and test operations:
 
 ```bash
-python main.py --pair
-```
-
-### LED Status Indicators
-
-| Color | Status |
-|-------|--------|
-| Blue | Waiting for Bluetooth connection |
-| White | Pairing successful |
-| Red | Pairing timeout (3 minutes) or error |
-
-### How Pairing Works
-
-1. Run `python main.py --pair` on the Raspberry Pi
-2. The LED strip shows **blue** to indicate waiting
-3. Open the GoalStick Android app and scan for "GoalStick" device
-4. Connect and select your team
-5. LED shows **white** on success, **red** on timeout
-
-The team configuration is stored in `~/.goalstick/config.json` and persists across reboots.
-
-## IoT Deployment
-
-Designed for embedded devices:
-- No external dependencies (no cron required)
-- Minimal resource usage during sleep periods
-- Graceful shutdown handling
-- Configurable check intervals to balance responsiveness vs. battery life
-- Persistent team configuration survives reboots
-
-## Dependencies
-
-- `nhlpy`: NHL API client
-- `python-dateutil`: Date parsing utilities
-- `pyserial`: Serial communication with ESP32
-- Python 3.14+
-
-## Team Colors
-
-Team colors are defined in `team_colors.json`. Each team has an array of hex color codes used for the LED celebration animation. You can customize colors by editing this file.
-
-## Build System
-
-Use the Makefile for building and testing:
-
-```bash
-# Show all available targets
 make help
 ```
 
-### Android Targets
+## Available Targets
 
 | Target | Description |
 |--------|-------------|
-| `make android-build` | Build debug APK |
-| `make android-release` | Build release APK |
+| `make android-build` | Build Android debug APK |
+| `make android-release` | Build Android release APK |
 | `make android-install` | Install APK to connected device |
 | `make android-clean` | Clean Android build artifacts |
-
-### Python Targets
-
-| Target | Description |
-|--------|-------------|
-| `make python-test` | Run unit tests (69 tests) |
-| `make python-test-cov` | Run tests with coverage report |
-| `make python-install` | Install package in dev mode |
-| `make python-clean` | Clean Python build artifacts |
-
-### Combined Targets
-
-| Target | Description |
-|--------|-------------|
+| `make python-test` | Run Python unit tests |
+| `make python-test-cov` | Run tests with coverage |
+| `make python-install` | Install Python package |
+| `make python-clean` | Clean Python artifacts |
 | `make all` | Build everything |
 | `make test` | Run all tests |
 | `make clean` | Clean all artifacts |
 
-## License
+---
+
+# NHL Team Abbreviations
+
+| Conference | Teams |
+|------------|-------|
+| Eastern | BOS, BUF, CAR, CBJ, DET, FLA, MTL, NJD, NYI, NYR, OTT, PHI, PIT, TBL, TOR, WSH |
+| Western | ANA, ARI, CGY, CHI, COL, DAL, EDM, LAK, MIN, NSH, SEA, SJS, STL, VAN, VGK, WPG |
+
+---
+
+# License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Contributing
+# Contributing
 
 1. Fork the repository
 2. Create a feature branch
