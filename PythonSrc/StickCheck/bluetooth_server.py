@@ -58,8 +58,14 @@ class BluetoothServer:
     
     def _setup_bluetooth(self) -> bool:
         """Configure Bluetooth for pairing."""
-        # Set device name
+        # Set device name using multiple methods for compatibility
         self._run_command(["bluetoothctl", "system-alias", self.config.device_name])
+        
+        # Also try setting hostname via hciconfig (more reliable on some systems)
+        self._run_command(["sudo", "hciconfig", "hci0", "name", self.config.device_name])
+        
+        # And via hostnamectl for the pretty hostname
+        self._run_command(["sudo", "hostnamectl", "set-hostname", "--pretty", self.config.device_name])
         
         # Set up agent for automatic pairing
         self._run_command(["bluetoothctl", "agent", "NoInputNoOutput"])
