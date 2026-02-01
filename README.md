@@ -15,6 +15,7 @@ A Python service that monitors NHL games and triggers celebratory LED light show
 ## Installation
 
 ```bash
+cd PythonSrc
 pip install -e .
 ```
 

@@ -5,7 +5,7 @@ description = ""
 authors = [
     {name = "Matt B",email = "calicojack@gmail.com"}
 ]
-readme = "README.md"
+readme = "../README.md"
 requires-python = ">=3.9"
 dependencies = [
     "nhlpy",
