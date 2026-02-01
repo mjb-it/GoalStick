@@ -91,6 +91,45 @@ class BluetoothServer:
             command = f"C:{color_string}"
             self.led_controller._send_command(command)
     
+    def _get_local_bluetooth_address(self) -> Optional[str]:
+        """Get the local Bluetooth adapter MAC address."""
+        try:
+            result = subprocess.run(
+                ["hciconfig", "hci0"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                # Parse output for BD Address
+                for line in result.stdout.split('\n'):
+                    if 'BD Address:' in line:
+                        # Format: "BD Address: XX:XX:XX:XX:XX:XX"
+                        parts = line.split('BD Address:')
+                        if len(parts) > 1:
+                            addr = parts[1].strip().split()[0]
+                            return addr
+            
+            # Fallback: try bluetoothctl
+            result = subprocess.run(
+                ["bluetoothctl", "show"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                for line in result.stdout.split('\n'):
+                    if 'Controller' in line:
+                        # Format: "Controller XX:XX:XX:XX:XX:XX ..."
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            return parts[1]
+            
+            return None
+        except Exception as e:
+            log.error(f"Error getting Bluetooth address: {e}")
+            return None
+    
     def _register_sdp_service(self) -> bool:
         """Register SPP service with SDP using sdptool."""
         try:
@@ -146,7 +185,16 @@ class BluetoothServer:
                 socket.BTPROTO_RFCOMM
             )
             self._server_socket.settimeout(self.config.timeout)
-            self._server_socket.bind(("", self.config.channel))
+            
+            # Get local Bluetooth adapter address
+            local_addr = self._get_local_bluetooth_address()
+            if not local_addr:
+                log.error("Could not find local Bluetooth adapter address")
+                self._send_led_status(["FF0000"])  # Red for error
+                return None
+            
+            log.info(f"Binding to Bluetooth address: {local_addr}")
+            self._server_socket.bind((local_addr, self.config.channel))
             self._server_socket.listen(1)
             
             log.info(f"Listening for Bluetooth connections on channel {self.config.channel}")
