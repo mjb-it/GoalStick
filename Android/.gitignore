@@ -1,0 +1,25 @@
+# Gradle files
+.gradle/
+build/
+
+# Local configuration
+local.properties
+
+# IDE
+.idea/
+*.iml
+
+# OS
+.DS_Store
+
+# Build outputs
+*.apk
+*.aar
+*.ap_
+
+# NDK
+obj/
+
+# Signing
+*.jks
+*.keystore
