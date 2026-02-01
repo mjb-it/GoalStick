@@ -12,6 +12,17 @@ A Python service that monitors NHL games and triggers celebratory LED light show
 - **IoT Optimized**: No system dependencies like cron required
 - **Graceful Shutdown**: Clean signal handling for embedded devices
 
+## Repository Structure
+
+```
+GoalStick/
+├── Android/         # Android companion app
+├── ESP32/           # ESP32 LED controller firmware
+├── PythonSrc/       # Raspberry Pi Python service
+├── Makefile         # Build and test automation
+└── README.md
+```
+
 ## Installation
 
 ```bash
@@ -236,6 +247,41 @@ Designed for embedded devices:
 ## Team Colors
 
 Team colors are defined in `team_colors.json`. Each team has an array of hex color codes used for the LED celebration animation. You can customize colors by editing this file.
+
+## Build System
+
+Use the Makefile for building and testing:
+
+```bash
+# Show all available targets
+make help
+```
+
+### Android Targets
+
+| Target | Description |
+|--------|-------------|
+| `make android-build` | Build debug APK |
+| `make android-release` | Build release APK |
+| `make android-install` | Install APK to connected device |
+| `make android-clean` | Clean Android build artifacts |
+
+### Python Targets
+
+| Target | Description |
+|--------|-------------|
+| `make python-test` | Run unit tests (69 tests) |
+| `make python-test-cov` | Run tests with coverage report |
+| `make python-install` | Install package in dev mode |
+| `make python-clean` | Clean Python build artifacts |
+
+### Combined Targets
+
+| Target | Description |
+|--------|-------------|
+| `make all` | Build everything |
+| `make test` | Run all tests |
+| `make clean` | Clean all artifacts |
 
 ## License
 
