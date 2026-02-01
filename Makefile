@@ -2,7 +2,7 @@
 # Build and test targets for Android app and Python code
 
 .PHONY: help android-build android-release android-clean android-install \
-        python-test python-test-cov python-install python-clean \
+        python-venv python-check-venv python-test python-test-cov python-install python-clean \
         all clean test
 
 # Default target
@@ -16,6 +16,7 @@ help:
 	@echo "  android-clean    Clean Android build artifacts"
 	@echo ""
 	@echo "Python targets:"
+	@echo "  python-venv      Create virtual environment (if needed)"
 	@echo "  python-test      Run Python unit tests"
 	@echo "  python-test-cov  Run tests with coverage report"
 	@echo "  python-install   Install Python package in dev mode"
@@ -66,17 +67,38 @@ PYTHON := $(VENV)/bin/python
 PIP := $(VENV)/bin/pip
 PYTEST := $(VENV)/bin/pytest
 
-python-test:
+# Create virtual environment if it doesn't exist
+python-venv:
+	@if [ ! -d "$(VENV)" ]; then \
+		echo "Creating virtual environment..."; \
+		python3 -m venv $(VENV); \
+		echo "Virtual environment created at $(VENV)"; \
+	else \
+		echo "Virtual environment already exists at $(VENV)"; \
+	fi
+
+# Ensure venv exists and has pytest installed
+python-check-venv:
+	@if [ ! -d "$(VENV)" ]; then \
+		echo "Error: Virtual environment not found. Run 'make python-venv' first."; \
+		exit 1; \
+	fi
+	@if [ ! -f "$(PYTEST)" ]; then \
+		echo "Installing dev dependencies..."; \
+		$(PIP) install -e "$(PYTHON_DIR)[dev]"; \
+	fi
+
+python-test: python-check-venv
 	@echo "Running Python tests..."
 	cd $(PYTHON_DIR) && ../$(PYTEST) -v
 
-python-test-cov:
+python-test-cov: python-check-venv
 	@echo "Running Python tests with coverage..."
 	cd $(PYTHON_DIR) && ../$(PYTEST) --cov=StickCheck --cov-report=term-missing
 
-python-install:
+python-install: python-venv
 	@echo "Installing Python package in dev mode..."
-	cd $(PYTHON_DIR) && ../$(PIP) install -e ".[dev]"
+	$(PIP) install -e "$(PYTHON_DIR)[dev]"
 
 python-clean:
 	@echo "Cleaning Python build artifacts..."
