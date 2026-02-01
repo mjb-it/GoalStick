@@ -33,14 +33,17 @@ help:
 ANDROID_DIR := Android
 GRADLEW := $(ANDROID_DIR)/gradlew
 
+# Java 17 is required for Android builds (Gradle doesn't support Java 25 yet)
+JAVA17_HOME := /opt/homebrew/opt/openjdk@17
+
 android-build:
 	@echo "Building Android debug APK..."
-	cd $(ANDROID_DIR) && ./gradlew assembleDebug
+	cd $(ANDROID_DIR) && JAVA_HOME=$(JAVA17_HOME) ./gradlew assembleDebug
 	@echo "APK: $(ANDROID_DIR)/app/build/outputs/apk/debug/app-debug.apk"
 
 android-release:
 	@echo "Building Android release APK..."
-	cd $(ANDROID_DIR) && ./gradlew assembleRelease
+	cd $(ANDROID_DIR) && JAVA_HOME=$(JAVA17_HOME) ./gradlew assembleRelease
 	@echo "APK: $(ANDROID_DIR)/app/build/outputs/apk/release/app-release.apk"
 
 android-install: android-build
@@ -49,7 +52,7 @@ android-install: android-build
 
 android-clean:
 	@echo "Cleaning Android build..."
-	cd $(ANDROID_DIR) && ./gradlew clean
+	cd $(ANDROID_DIR) && JAVA_HOME=$(JAVA17_HOME) ./gradlew clean
 	rm -rf $(ANDROID_DIR)/.gradle
 	rm -rf $(ANDROID_DIR)/app/build
 
