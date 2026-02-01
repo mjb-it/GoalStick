@@ -58,31 +58,35 @@ class BluetoothServer:
     
     def _setup_bluetooth(self) -> bool:
         """Configure Bluetooth for pairing."""
+        # Ensure Bluetooth adapter is up
+        self._run_command(["sudo", "hciconfig", "hci0", "up"])
+        
         # Set device name using multiple methods for compatibility
         self._run_command(["bluetoothctl", "system-alias", self.config.device_name])
-        
-        # Also try setting hostname via hciconfig (more reliable on some systems)
         self._run_command(["sudo", "hciconfig", "hci0", "name", self.config.device_name])
         
-        # And via hostnamectl for the pretty hostname
-        self._run_command(["sudo", "hostnamectl", "set-hostname", "--pretty", self.config.device_name])
+        # Make discoverable using hciconfig (more reliable than bluetoothctl)
+        success, output = self._run_command(["sudo", "hciconfig", "hci0", "piscan"])
+        if not success:
+            log.warning(f"hciconfig piscan failed: {output}")
+        else:
+            log.info("Enabled page and inquiry scan (piscan)")
+        
+        # Also try bluetoothctl for compatibility
+        self._run_command(["bluetoothctl", "discoverable", "on"])
+        self._run_command(["bluetoothctl", "pairable", "on"])
         
         # Set up agent for automatic pairing
         self._run_command(["bluetoothctl", "agent", "NoInputNoOutput"])
         self._run_command(["bluetoothctl", "default-agent"])
         
-        # Make discoverable and pairable
-        success, _ = self._run_command(["bluetoothctl", "discoverable", "on"])
-        if not success:
-            log.error("Failed to make device discoverable")
-            return False
+        # Verify discoverability
+        success, output = self._run_command(["hciconfig", "hci0"])
+        if "PSCAN" in output and "ISCAN" in output:
+            log.info(f"Bluetooth configured as '{self.config.device_name}' - discoverable and connectable")
+        else:
+            log.warning(f"Bluetooth may not be fully discoverable. hciconfig output: {output}")
         
-        success, _ = self._run_command(["bluetoothctl", "pairable", "on"])
-        if not success:
-            log.error("Failed to make device pairable")
-            return False
-        
-        log.info(f"Bluetooth configured as '{self.config.device_name}'")
         return True
     
     def _cleanup_bluetooth(self) -> None:
