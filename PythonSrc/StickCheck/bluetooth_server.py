@@ -1,0 +1,262 @@
+import json
+import logging
+import socket
+import subprocess
+import threading
+import time
+from dataclasses import dataclass
+from typing import Optional, Callable
+
+log = logging.getLogger(__name__)
+
+# Bluetooth SPP UUID
+SPP_UUID = "00001101-0000-1000-8000-00805F9B34FB"
+
+
+@dataclass
+class ReceivedConfig:
+    wifi_ssid: str
+    wifi_password: str
+    team_abbr: str
+
+
+@dataclass
+class BluetoothServerConfig:
+    device_name: str = "GoalStick"
+    timeout: int = 180  # 3 minutes
+    channel: int = 1
+
+
+class BluetoothServer:
+    """Bluetooth RFCOMM server for receiving configuration from Android app."""
+    
+    def __init__(self, config: BluetoothServerConfig = None, led_controller=None):
+        self.config = config or BluetoothServerConfig()
+        self.led_controller = led_controller
+        self._running = False
+        self._server_socket = None
+        self._client_socket = None
+        self._on_config_received: Optional[Callable[[ReceivedConfig], None]] = None
+    
+    def set_config_callback(self, callback: Callable[[ReceivedConfig], None]) -> None:
+        """Set callback to be called when configuration is received."""
+        self._on_config_received = callback
+    
+    def _run_command(self, cmd: list) -> tuple[bool, str]:
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            return result.returncode == 0, result.stdout + result.stderr
+        except subprocess.TimeoutExpired:
+            return False, "Command timed out"
+        except Exception as e:
+            return False, str(e)
+    
+    def _setup_bluetooth(self) -> bool:
+        """Configure Bluetooth for pairing."""
+        # Set device name
+        self._run_command(["bluetoothctl", "system-alias", self.config.device_name])
+        
+        # Set up agent for automatic pairing
+        self._run_command(["bluetoothctl", "agent", "NoInputNoOutput"])
+        self._run_command(["bluetoothctl", "default-agent"])
+        
+        # Make discoverable and pairable
+        success, _ = self._run_command(["bluetoothctl", "discoverable", "on"])
+        if not success:
+            log.error("Failed to make device discoverable")
+            return False
+        
+        success, _ = self._run_command(["bluetoothctl", "pairable", "on"])
+        if not success:
+            log.error("Failed to make device pairable")
+            return False
+        
+        log.info(f"Bluetooth configured as '{self.config.device_name}'")
+        return True
+    
+    def _cleanup_bluetooth(self) -> None:
+        """Disable discoverable/pairable mode."""
+        self._run_command(["bluetoothctl", "discoverable", "off"])
+        self._run_command(["bluetoothctl", "pairable", "off"])
+    
+    def _send_led_status(self, colors: list) -> None:
+        """Send LED status colors."""
+        if self.led_controller and self.led_controller.is_connected():
+            color_string = ",".join(colors)
+            command = f"C:{color_string}"
+            self.led_controller._send_command(command)
+    
+    def _register_sdp_service(self) -> bool:
+        """Register SPP service with SDP using sdptool."""
+        try:
+            # Add SPP service record
+            result = subprocess.run(
+                ["sdptool", "add", "--channel", str(self.config.channel), "SP"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode == 0:
+                log.info(f"Registered SPP service on channel {self.config.channel}")
+                return True
+            else:
+                log.warning(f"sdptool add failed: {result.stderr}")
+                return False
+        except FileNotFoundError:
+            log.warning("sdptool not found, skipping SDP registration")
+            return True  # Continue anyway
+        except Exception as e:
+            log.warning(f"SDP registration error: {e}")
+            return True  # Continue anyway
+    
+    def start(self) -> Optional[ReceivedConfig]:
+        """Start Bluetooth server and wait for configuration.
+        
+        Returns:
+            ReceivedConfig if configuration received, None on timeout/error.
+        """
+        log.info("Starting Bluetooth configuration server")
+        self._running = True
+        
+        # Connect to LED controller if available
+        if self.led_controller:
+            self.led_controller.connect()
+        
+        try:
+            # Setup Bluetooth
+            if not self._setup_bluetooth():
+                self._send_led_status(["FF0000"])  # Red for error
+                return None
+            
+            # Register SDP service
+            self._register_sdp_service()
+            
+            # Show blue LED - waiting for connection
+            self._send_led_status(["0000FF"])
+            
+            # Create RFCOMM server socket
+            self._server_socket = socket.socket(
+                socket.AF_BLUETOOTH,
+                socket.SOCK_STREAM,
+                socket.BTPROTO_RFCOMM
+            )
+            self._server_socket.settimeout(self.config.timeout)
+            self._server_socket.bind(("", self.config.channel))
+            self._server_socket.listen(1)
+            
+            log.info(f"Listening for Bluetooth connections on channel {self.config.channel}")
+            
+            # Wait for connection
+            try:
+                self._client_socket, client_info = self._server_socket.accept()
+                log.info(f"Connected to {client_info}")
+                
+                # Show cyan LED - connected, waiting for data
+                self._send_led_status(["00FFFF"])
+                
+                # Receive configuration data
+                self._client_socket.settimeout(30)  # 30 second timeout for data
+                data = b""
+                while self._running:
+                    try:
+                        chunk = self._client_socket.recv(1024)
+                        if not chunk:
+                            break
+                        data += chunk
+                        
+                        # Try to parse JSON
+                        try:
+                            config_json = json.loads(data.decode('utf-8'))
+                            received_config = self._process_config(config_json)
+                            if received_config:
+                                # Send acknowledgment
+                                response = json.dumps({"status": "ok"})
+                                self._client_socket.send(response.encode('utf-8'))
+                                
+                                # Show green LED - success
+                                self._send_led_status(["00FF00"])
+                                
+                                if self._on_config_received:
+                                    self._on_config_received(received_config)
+                                
+                                return received_config
+                        except json.JSONDecodeError:
+                            # Not complete JSON yet, keep reading
+                            continue
+                    except socket.timeout:
+                        log.warning("Timeout waiting for configuration data")
+                        break
+                
+            except socket.timeout:
+                log.warning("Timeout waiting for Bluetooth connection")
+                self._send_led_status(["FF0000"])  # Red for timeout
+                return None
+            
+        except Exception as e:
+            log.error(f"Bluetooth server error: {e}")
+            self._send_led_status(["FF0000"])  # Red for error
+            return None
+        finally:
+            self._cleanup()
+    
+    def _process_config(self, config_json: dict) -> Optional[ReceivedConfig]:
+        """Process received configuration JSON."""
+        try:
+            if config_json.get("type") != "config":
+                log.warning(f"Unknown message type: {config_json.get('type')}")
+                return None
+            
+            wifi_ssid = config_json.get("wifi_ssid", "")
+            wifi_password = config_json.get("wifi_password", "")
+            team_abbr = config_json.get("team_abbr", "WSH")
+            
+            log.info(f"Received config - SSID: {wifi_ssid}, Team: {team_abbr}")
+            
+            return ReceivedConfig(
+                wifi_ssid=wifi_ssid,
+                wifi_password=wifi_password,
+                team_abbr=team_abbr
+            )
+        except Exception as e:
+            log.error(f"Error processing config: {e}")
+            return None
+    
+    def _cleanup(self) -> None:
+        """Clean up sockets and Bluetooth settings."""
+        self._running = False
+        
+        if self._client_socket:
+            try:
+                self._client_socket.close()
+            except:
+                pass
+            self._client_socket = None
+        
+        if self._server_socket:
+            try:
+                self._server_socket.close()
+            except:
+                pass
+            self._server_socket = None
+        
+        self._cleanup_bluetooth()
+        
+        # Give time for LED animation
+        time.sleep(2)
+        
+        if self.led_controller:
+            self.led_controller.idle()
+    
+    def stop(self) -> None:
+        """Stop the Bluetooth server."""
+        log.info("Stopping Bluetooth server")
+        self._running = False
+        self._cleanup()
+    
+    def is_running(self) -> bool:
+        return self._running

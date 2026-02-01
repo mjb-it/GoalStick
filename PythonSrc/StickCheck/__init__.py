@@ -3,6 +3,7 @@ from .scheduler import StickCheckScheduler, SchedulerConfig, HockeySeasonDetecto
 from .led_controller import LEDController, LEDConfig
 from .config_store import ConfigStore, UserConfig
 from .bluetooth_pairing import BluetoothPairing, BluetoothConfig, PairingStatus
+from .bluetooth_server import BluetoothServer, BluetoothServerConfig, ReceivedConfig
 from .button_handler import ButtonHandler, ButtonConfig, ButtonState
 from .esp32_reset import ESP32Reset, ResetConfig
 
@@ -19,6 +20,9 @@ __all__ = [
     "BluetoothPairing",
     "BluetoothConfig",
     "PairingStatus",
+    "BluetoothServer",
+    "BluetoothServerConfig",
+    "ReceivedConfig",
     "ButtonHandler",
     "ButtonConfig",
     "ButtonState",

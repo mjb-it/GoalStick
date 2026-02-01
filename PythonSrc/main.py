@@ -7,6 +7,8 @@ from StickCheck import (
     SchedulerConfig,
     BluetoothPairing,
     BluetoothConfig,
+    BluetoothServer,
+    BluetoothServerConfig,
     LEDController,
     LEDConfig,
     ConfigStore,
@@ -78,21 +80,35 @@ def run_pairing_mode(config: SchedulerConfig) -> bool:
         team_colors_path=config.team_colors_path
     )
     
-    # Set up Bluetooth pairing
-    bt_config = BluetoothConfig(
+    # Set up Bluetooth server to receive configuration from Android app
+    bt_config = BluetoothServerConfig(
         device_name=config.bluetooth_device_name,
-        pairing_timeout=config.bluetooth_pairing_timeout
+        timeout=config.bluetooth_pairing_timeout
     )
-    pairing = BluetoothPairing(config=bt_config, led_controller=led_controller)
+    server = BluetoothServer(config=bt_config, led_controller=led_controller)
     
-    # Start pairing
-    status = pairing.start_pairing_mode()
+    # Set callback to save received configuration
+    config_store = ConfigStore()
     
-    if status == PairingStatus.SUCCESS:
-        log.info("Bluetooth pairing completed successfully")
+    def on_config_received(received_config):
+        log.info(f"Received configuration - Team: {received_config.team_abbr}")
+        config_store.set_team(received_config.team_abbr)
+        
+        # TODO: Apply WiFi configuration if needed
+        # For now, just log it
+        if received_config.wifi_ssid:
+            log.info(f"WiFi SSID received: {received_config.wifi_ssid}")
+    
+    server.set_config_callback(on_config_received)
+    
+    # Start server and wait for configuration
+    received = server.start()
+    
+    if received:
+        log.info("Bluetooth configuration received successfully")
         return True
     else:
-        log.warning(f"Bluetooth pairing ended with status: {status.value}")
+        log.warning("Bluetooth pairing timed out or failed")
         return False
 
 def main():
