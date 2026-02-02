@@ -95,16 +95,39 @@ class MainActivity : AppCompatActivity() {
         observeViewModel()
         registerBluetoothReceiver()
         
-        // Show paired devices on startup
-        showPairedDevices()
+        // Auto-connect to GoalStick if paired, or prompt user
+        autoConnectOrPrompt()
     }
     
-    private fun showPairedDevices() {
+    private fun autoConnectOrPrompt() {
         val pairedDevices = viewModel.bluetoothManager.getPairedDevices()
-        if (pairedDevices.isNotEmpty()) {
-            deviceAdapter.submitList(pairedDevices)
-            devicesRecyclerView.visibility = View.VISIBLE
-            statusText.text = "Select your GoalStick device or tap Scan to find new devices"
+        val goalStickDevice = pairedDevices.find { device ->
+            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) 
+                == PackageManager.PERMISSION_GRANTED) {
+                device.name == "GoalStick"
+            } else {
+                false
+            }
+        }
+        
+        if (goalStickDevice != null) {
+            // Found GoalStick - auto-connect
+            statusText.text = "Found GoalStick. Connecting..."
+            lifecycleScope.launch {
+                viewModel.connect(goalStickDevice)
+            }
+        } else {
+            // No GoalStick paired - prompt user to pair
+            statusText.text = "GoalStick not paired. Please pair in Bluetooth settings."
+            showBluetoothSettingsPrompt()
+        }
+    }
+    
+    private fun showBluetoothSettingsPrompt() {
+        scanButton.text = "Open Bluetooth Settings"
+        scanButton.setOnClickListener {
+            val intent = Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS)
+            startActivity(intent)
         }
     }
     
@@ -281,6 +304,14 @@ class MainActivity : AppCompatActivity() {
             registerReceiver(bluetoothReceiver, filter, RECEIVER_EXPORTED)
         } else {
             registerReceiver(bluetoothReceiver, filter)
+        }
+    }
+    
+    override fun onResume() {
+        super.onResume()
+        // Re-check for GoalStick when returning from Bluetooth settings
+        if (viewModel.bluetoothManager.connectionState.value is BluetoothManager.ConnectionState.Disconnected) {
+            autoConnectOrPrompt()
         }
     }
     
