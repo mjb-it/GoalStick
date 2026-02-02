@@ -329,7 +329,10 @@ class BluetoothServer:
         """Trigger a test goal celebration."""
         if self.led_controller:
             log.info("Triggering test goal celebration!")
-            self.led_controller.celebrate()
+            # Get current team from config
+            current_config = self._get_current_config()
+            team_abbr = current_config.get("team_abbr", "WSH")
+            self.led_controller.celebrate(team_abbr)
     
     def _process_config(self, config_json: dict) -> Optional[ReceivedConfig]:
         """Process received configuration JSON."""
