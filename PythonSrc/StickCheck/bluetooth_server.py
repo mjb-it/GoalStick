@@ -2,10 +2,13 @@ import json
 import logging
 import socket
 import subprocess
+from typing import Optional, Callable
+
+from .config import BluetoothConfig, ReceivedConfig
+from .bluetooth_agent import start_agent, stop_agent
 import threading
 import time
 from dataclasses import dataclass
-from typing import Optional, Callable
 
 log = logging.getLogger(__name__)
 
@@ -72,9 +75,15 @@ class BluetoothServer:
         else:
             log.info("Enabled page and inquiry scan (piscan)")
         
-        # Set up agent for automatic pairing (no PIN required)
-        self._run_command(["bluetoothctl", "agent", "NoInputNoOutput"])
-        self._run_command(["bluetoothctl", "default-agent"])
+        # Start the D-Bus Bluetooth agent for automatic PIN-less pairing
+        try:
+            start_agent()
+            log.info("Started Bluetooth auto-pair agent (no PIN required)")
+        except Exception as e:
+            log.warning(f"Could not start Bluetooth agent: {e}")
+            # Fall back to bluetoothctl commands
+            self._run_command(["bluetoothctl", "agent", "NoInputNoOutput"])
+            self._run_command(["bluetoothctl", "default-agent"])
         
         # Also try bluetoothctl for compatibility
         self._run_command(["bluetoothctl", "discoverable", "on"])
@@ -90,7 +99,8 @@ class BluetoothServer:
         return True
     
     def _cleanup_bluetooth(self) -> None:
-        """Disable discoverable/pairable mode."""
+        """Disable discoverable/pairable mode and stop agent."""
+        stop_agent()
         self._run_command(["bluetoothctl", "discoverable", "off"])
         self._run_command(["bluetoothctl", "pairable", "off"])
     
