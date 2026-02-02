@@ -28,6 +28,7 @@ import com.goalstick.android.bluetooth.BluetoothManager
 import com.goalstick.android.data.TeamData
 import com.goalstick.android.ui.DeviceAdapter
 import com.goalstick.android.ui.MainViewModel
+import com.goalstick.android.wifi.WifiHelper
 import com.google.android.material.textfield.TextInputEditText
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -51,6 +52,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var sendConfigButton: Button
     private lateinit var testGoalButton: Button
     private lateinit var configProgressBar: ProgressBar
+    
+    // WiFi helper
+    private lateinit var wifiHelper: WifiHelper
     
     private val bluetoothReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -83,6 +87,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
         
         viewModel = ViewModelProvider(this)[MainViewModel::class.java]
+        wifiHelper = WifiHelper(this)
         
         setupViews()
         setupRecyclerView()
@@ -162,6 +167,13 @@ class MainActivity : AppCompatActivity() {
                         configLayout.visibility = View.VISIBLE
                         sendConfigButton.isEnabled = true
                         testGoalButton.isEnabled = true
+                        
+                        // Pre-fill WiFi SSID if connected to WiFi
+                        if (wifiSsidInput.text.isNullOrEmpty()) {
+                            wifiHelper.getCurrentSsid()?.let { ssid ->
+                                wifiSsidInput.setText(ssid)
+                            }
+                        }
                     }
                     is BluetoothManager.ConnectionState.Error -> {
                         statusText.text = "Error: ${state.message}"
