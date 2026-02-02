@@ -115,7 +115,14 @@ class BluetoothManager(private val context: Context) {
             true
         } catch (e: Exception) {
             Log.e(TAG, "Connection failed", e)
-            _connectionState.value = ConnectionState.Error(e.message ?: "Connection failed")
+            val errorMsg = if (e.message?.contains("socket might closed") == true || 
+                               e.message?.contains("Connection refused") == true ||
+                               e.message?.contains("read failed") == true) {
+                "GoalStick not ready. Make sure it's in pairing mode."
+            } else {
+                e.message ?: "Connection failed"
+            }
+            _connectionState.value = ConnectionState.Error(errorMsg)
             disconnect()
             false
         }

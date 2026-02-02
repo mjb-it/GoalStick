@@ -89,6 +89,18 @@ class MainActivity : AppCompatActivity() {
         setupTeamSpinner()
         observeViewModel()
         registerBluetoothReceiver()
+        
+        // Show paired devices on startup
+        showPairedDevices()
+    }
+    
+    private fun showPairedDevices() {
+        val pairedDevices = viewModel.bluetoothManager.getPairedDevices()
+        if (pairedDevices.isNotEmpty()) {
+            deviceAdapter.submitList(pairedDevices)
+            devicesRecyclerView.visibility = View.VISIBLE
+            statusText.text = "Select your GoalStick device or tap Scan to find new devices"
+        }
     }
     
     private fun setupViews() {
