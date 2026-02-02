@@ -52,6 +52,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     
+    private val _currentConfig = MutableStateFlow<BluetoothManager.GoalStickConfig?>(null)
+    val currentConfig: StateFlow<BluetoothManager.GoalStickConfig?> = _currentConfig.asStateFlow()
+    
+    fun fetchConfig() {
+        viewModelScope.launch {
+            val config = bluetoothManager.getConfig()
+            _currentConfig.value = config
+        }
+    }
+    
     override fun onCleared() {
         super.onCleared()
         bluetoothManager.disconnect()

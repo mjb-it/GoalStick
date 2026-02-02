@@ -184,6 +184,43 @@ class BluetoothManager(private val context: Context) {
         }
     }
     
+    data class GoalStickConfig(
+        val teamAbbr: String?
+    )
+    
+    suspend fun getConfig(): GoalStickConfig? = withContext(Dispatchers.IO) {
+        try {
+            val json = JSONObject().apply {
+                put("type", "get_config")
+            }
+            
+            outputStream?.write(json.toString().toByteArray())
+            outputStream?.flush()
+            
+            // Wait for response
+            val buffer = ByteArray(1024)
+            val bytesRead = inputStream?.read(buffer) ?: -1
+            
+            if (bytesRead > 0) {
+                val response = String(buffer, 0, bytesRead)
+                val responseJson = JSONObject(response)
+                if (responseJson.getString("status") == "ok") {
+                    val configJson = responseJson.optJSONObject("config")
+                    GoalStickConfig(
+                        teamAbbr = configJson?.optString("team_abbr")
+                    )
+                } else {
+                    null
+                }
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get config", e)
+            null
+        }
+    }
+    
     fun disconnect() {
         try {
             inputStream?.close()

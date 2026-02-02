@@ -114,6 +114,15 @@ class BluetoothServer:
             command = f"C:{color_string}"
             self.led_controller._send_command(command)
     
+    def _get_current_config(self) -> dict:
+        """Get the current configuration from config store."""
+        from .config_store import ConfigStore
+        config_store = ConfigStore()
+        user_config = config_store.load()
+        return {
+            "team_abbr": user_config.team_abbr
+        }
+    
     def _get_local_bluetooth_address(self) -> Optional[str]:
         """Get the local Bluetooth adapter MAC address."""
         try:
@@ -247,7 +256,17 @@ class BluetoothServer:
                             
                             msg_type = message_json.get("type")
                             
-                            if msg_type == "test_goal":
+                            if msg_type == "get_config":
+                                # Return current configuration
+                                current_config = self._get_current_config()
+                                response = json.dumps({
+                                    "status": "ok",
+                                    "config": current_config
+                                })
+                                self._client_socket.send(response.encode('utf-8'))
+                                continue  # Keep listening for more commands
+                            
+                            elif msg_type == "test_goal":
                                 # Handle test goal - trigger celebration and continue
                                 self._trigger_test_goal()
                                 response = json.dumps({"status": "ok"})

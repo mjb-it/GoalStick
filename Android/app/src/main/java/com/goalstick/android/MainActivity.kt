@@ -197,6 +197,9 @@ class MainActivity : AppCompatActivity() {
                                 wifiSsidInput.setText(ssid)
                             }
                         }
+                        
+                        // Fetch current config from GoalStick
+                        viewModel.fetchConfig()
                     }
                     is BluetoothManager.ConnectionState.Error -> {
                         statusText.text = "Error: ${state.message}"
@@ -228,6 +231,18 @@ class MainActivity : AppCompatActivity() {
                     Toast.makeText(this@MainActivity, it, Toast.LENGTH_LONG).show()
                     configProgressBar.visibility = View.GONE
                     viewModel.clearError()
+                }
+            }
+        }
+        
+        lifecycleScope.launch {
+            viewModel.currentConfig.collectLatest { config ->
+                config?.teamAbbr?.let { teamAbbr ->
+                    // Find the team in the spinner and select it
+                    val teamIndex = TeamData.teams.indexOfFirst { it.first == teamAbbr }
+                    if (teamIndex >= 0) {
+                        teamSpinner.setSelection(teamIndex)
+                    }
                 }
             }
         }
