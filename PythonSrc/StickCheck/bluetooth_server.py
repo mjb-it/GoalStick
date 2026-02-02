@@ -2,13 +2,12 @@ import json
 import logging
 import socket
 import subprocess
-from typing import Optional, Callable
-
-from .config import BluetoothConfig, ReceivedConfig
-from .bluetooth_agent import start_agent, stop_agent
 import threading
 import time
 from dataclasses import dataclass
+from typing import Optional, Callable
+
+from .bluetooth_agent import start_agent, stop_agent
 
 log = logging.getLogger(__name__)
 
