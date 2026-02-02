@@ -1,7 +1,9 @@
 import logging
+import logging.handlers
 import signal
 import sys
 import argparse
+from pathlib import Path
 from StickCheck import (
     StickCheckScheduler, 
     SchedulerConfig,
@@ -17,10 +19,37 @@ from StickCheck import (
     ButtonConfig
 )
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-)
+def setup_logging():
+    """Set up logging with rotating file handler (weekly rotation, keep 4 weeks)."""
+    log_dir = Path.home() / ".goalstick" / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / "goalstick.log"
+    
+    formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+    
+    # Rotating file handler - rotate weekly, keep 4 backups
+    file_handler = logging.handlers.TimedRotatingFileHandler(
+        log_file,
+        when="W0",  # Rotate on Monday
+        interval=1,
+        backupCount=4,
+        encoding="utf-8"
+    )
+    file_handler.setFormatter(formatter)
+    file_handler.setLevel(logging.INFO)
+    
+    # Console handler for systemd/journald
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    console_handler.setLevel(logging.INFO)
+    
+    # Configure root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    root_logger.addHandler(file_handler)
+    root_logger.addHandler(console_handler)
+
+setup_logging()
 
 log = logging.getLogger(__name__)
 
