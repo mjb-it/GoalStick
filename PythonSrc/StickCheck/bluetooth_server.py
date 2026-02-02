@@ -347,6 +347,19 @@ class BluetoothServer:
             
             log.info(f"Received config - SSID: {wifi_ssid}, Team: {team_abbr}")
             
+            # Configure WiFi if credentials provided
+            if wifi_ssid and wifi_password:
+                from .wifi_config import configure_wifi
+                if configure_wifi(wifi_ssid, wifi_password):
+                    log.info(f"WiFi configured for network: {wifi_ssid}")
+                else:
+                    log.warning(f"Failed to configure WiFi for network: {wifi_ssid}")
+            
+            # Save team configuration
+            from .config_store import ConfigStore
+            config_store = ConfigStore()
+            config_store.set_team(team_abbr)
+            
             return ReceivedConfig(
                 wifi_ssid=wifi_ssid,
                 wifi_password=wifi_password,
