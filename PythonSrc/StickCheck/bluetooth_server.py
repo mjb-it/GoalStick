@@ -72,13 +72,13 @@ class BluetoothServer:
         else:
             log.info("Enabled page and inquiry scan (piscan)")
         
+        # Set up agent for automatic pairing (no PIN required)
+        self._run_command(["bluetoothctl", "agent", "NoInputNoOutput"])
+        self._run_command(["bluetoothctl", "default-agent"])
+        
         # Also try bluetoothctl for compatibility
         self._run_command(["bluetoothctl", "discoverable", "on"])
         self._run_command(["bluetoothctl", "pairable", "on"])
-        
-        # Set up agent for automatic pairing
-        self._run_command(["bluetoothctl", "agent", "NoInputNoOutput"])
-        self._run_command(["bluetoothctl", "default-agent"])
         
         # Verify discoverability
         success, output = self._run_command(["hciconfig", "hci0"])
@@ -218,7 +218,7 @@ class BluetoothServer:
                 self._send_led_status(["00FFFF"])
                 
                 # Receive and process messages
-                self._client_socket.settimeout(30)  # 30 second timeout for data
+                self._client_socket.settimeout(300)  # 5 minute timeout for data
                 data = b""
                 while self._running:
                     try:
