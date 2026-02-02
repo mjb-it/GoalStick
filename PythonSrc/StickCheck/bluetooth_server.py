@@ -63,6 +63,10 @@ class BluetoothServer:
         # Ensure Bluetooth adapter is up
         self._run_command(["sudo", "hciconfig", "hci0", "up"])
         
+        # Set device class to "Computer" (not headset)
+        # Class 0x1C0100 = Service: Networking, Object Transfer | Major: Computer | Minor: Uncategorized
+        self._run_command(["sudo", "hciconfig", "hci0", "class", "0x1C0100"])
+        
         # Set device name using multiple methods for compatibility
         self._run_command(["bluetoothctl", "system-alias", self.config.device_name])
         self._run_command(["sudo", "hciconfig", "hci0", "name", self.config.device_name])
