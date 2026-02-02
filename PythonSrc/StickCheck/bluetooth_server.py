@@ -156,9 +156,9 @@ class BluetoothServer:
     def _register_sdp_service(self) -> bool:
         """Register SPP service with SDP using sdptool."""
         try:
-            # Add SPP service record
+            # Add SPP service record (requires sudo)
             result = subprocess.run(
-                ["sdptool", "add", "--channel", str(self.config.channel), "SP"],
+                ["sudo", "sdptool", "add", "--channel", str(self.config.channel), "SP"],
                 capture_output=True,
                 text=True,
                 timeout=10
