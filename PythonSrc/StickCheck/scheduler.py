@@ -266,8 +266,11 @@ class StickCheckScheduler:
             # Wait for game to actually start (with slower polling)
             if self._wait_for_game_start():
                 self._monitor_live_game()
+                log.info("Game ended - sleeping until tomorrow's check")
+                self._sleep_until_daily_check()
             else:
                 log.info("Game not in progress or already finished")
+                self._sleep_until_daily_check()
         else:
             # No game today, sleep until tomorrow
             log.info("No game to monitor today")
