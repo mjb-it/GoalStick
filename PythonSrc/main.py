@@ -48,6 +48,10 @@ def setup_logging():
     root_logger.setLevel(logging.INFO)
     root_logger.addHandler(file_handler)
     root_logger.addHandler(console_handler)
+    
+    # Silence noisy httpx logging
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 setup_logging()
 

@@ -14,7 +14,8 @@ log = logging.getLogger(__name__)
 @dataclass
 class SchedulerConfig:
     team_abbr: str = None  # If None, will load from persistent config
-    check_interval: float = 2.0  # seconds during live game
+    check_interval: float = 5.0  # seconds during live game
+    pre_game_check_interval: float = 30.0  # seconds when waiting for game to start
     daily_check_hour: int = 8  # hour to check for games (24-hour format)
     pre_game_wake_minutes: int = 5  # minutes before game to wake up
     api_timeout: int = 10  # seconds for API timeouts
@@ -200,18 +201,20 @@ class StickCheckScheduler:
             log.warning("ESP32 not available, continuing without lights")
         
         try:
-            while self.running and self.scorekeeper.is_in_play():
-                if self.scorekeeper.did_we_score():
+            game_in_play = True
+            while self.running and game_in_play:
+                scored, game_in_play = self.scorekeeper.check_for_goal()
+                
+                if scored:
                     goals_detected += 1
                     game = self.scorekeeper.my_game
                     log.info(f"GOAL! {game.away_team} vs {game.home_team} - Goal #{goals_detected}")
                     
                     # Trigger LED celebration
                     self.led_controller.celebrate(self.config.team_abbr)
-                else:
-                    log.debug("No goals yet")
                 
-                time.sleep(self.config.check_interval)
+                if game_in_play:
+                    time.sleep(self.config.check_interval)
         finally:
             # Clean up LED controller
             self.led_controller.idle()
@@ -221,6 +224,26 @@ class StickCheckScheduler:
             log.info(f"Game monitoring complete. Detected {goals_detected} goals!")
         else:
             log.info("Game monitoring complete. No goals detected.")
+    
+    def _wait_for_game_start(self) -> bool:
+        """Wait for game to actually start. Returns True if game started, False if gave up."""
+        if not self.scorekeeper:
+            return False
+        
+        log.info("Waiting for game to start (checking every 30 seconds)...")
+        max_wait_minutes = 60  # Give up after 60 minutes past scheduled start
+        checks = 0
+        max_checks = (max_wait_minutes * 60) // int(self.config.pre_game_check_interval)
+        
+        while self.running and checks < max_checks:
+            if self.scorekeeper.is_in_play():
+                log.info("Game has started!")
+                return True
+            checks += 1
+            time.sleep(self.config.pre_game_check_interval)
+        
+        log.warning("Game did not start within expected time")
+        return False
     
     def run_daily_cycle(self) -> None:
         if not HockeySeasonDetector.is_hockey_season():
@@ -234,8 +257,8 @@ class StickCheckScheduler:
             # Game found today
             self._sleep_until_game_start()
             
-            # Check if game is now in progress
-            if self.scorekeeper and self.scorekeeper.is_in_play():
+            # Wait for game to actually start (with slower polling)
+            if self._wait_for_game_start():
                 self._monitor_live_game()
             else:
                 log.info("Game not in progress or already finished")

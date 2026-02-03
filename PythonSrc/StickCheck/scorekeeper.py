@@ -44,41 +44,57 @@ class ScoreKeeper:
         self.my_game = my_game
         self._client = NHLClient()
         self.last_score: int = 0
-
+        self._game_ended = False
 
     def is_in_play(self) -> bool:
+        """Check if game is still in play. Uses cached state if game has ended."""
+        if self._game_ended:
+            return False
         try:
             boxscore = self._client.game_center.boxscore(game_id=self.my_game.game_id)
             state = boxscore.get("gameState")
-            return state in ["LIVE", "CRIT"]
+            in_play = state in ["LIVE", "CRIT"]
+            if not in_play and state in ["FINAL", "OFF"]:
+                self._game_ended = True
+            return in_play
         except Exception as e:
             log.error(f"Error checking game state: {e}")
             return False
 
-    def did_we_score(self) -> bool:
+    def check_for_goal(self) -> tuple[bool, bool]:
+        """
+        Check if we scored and if game is still in play.
+        Returns (scored: bool, game_in_play: bool)
+        Uses single API call to play-by-play which contains both score and game state.
+        """
+        if self._game_ended:
+            return False, False
+            
         try:
-            # Get both game state and score in one API call
-            boxscore = self._client.game_center.boxscore(game_id=self.my_game.game_id)
-            state = boxscore.get("gameState")
-            
-            if state not in ["LIVE", "CRIT"]:
-                log.debug("Game not in play")
-                return False
-            
-            # Get current score from play-by-play
             play_by_play = self._client.game_center.play_by_play(game_id=self.my_game.game_id)
+            
+            # Check game state
+            state = play_by_play.get("gameState")
+            game_in_play = state in ["LIVE", "CRIT"]
+            
+            if not game_in_play:
+                if state in ["FINAL", "OFF"]:
+                    self._game_ended = True
+                return False, False
+            
+            # Check score
             current_score = play_by_play[self.my_game.my_team_location]["score"]
             
             if current_score > self.last_score:
                 self.last_score = current_score
-                return True
+                return True, True
             elif current_score < self.last_score:
                 # Score correction (rare but possible)
                 self.last_score = current_score
                 log.warning(f"Score corrected: {current_score}")
-                return False
+                return False, True
             else:
-                return False
+                return False, True
         except Exception as e:
             log.error(f"Error checking score: {e}")
-            return False
+            return False, True  # Assume game still in play on error
