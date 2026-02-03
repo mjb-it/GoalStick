@@ -3,7 +3,7 @@
 
 .PHONY: help android-build android-release android-clean android-install \
         python-venv python-check-venv python-test python-test-cov python-install python-clean \
-        deploy service-install service-uninstall service-status service-logs \
+        deploy deploy-readonly service-install service-uninstall service-status service-logs \
         all clean test
 
 # Default target
@@ -25,6 +25,7 @@ help:
 	@echo ""
 	@echo "Deployment targets (run on Pi):"
 	@echo "  deploy           Deploy to /opt/goalstick and install service"
+	@echo "  deploy-readonly  Deploy + set up read-only filesystem (reboot required)"
 	@echo "  service-install  Install systemd service from current directory"
 	@echo "  service-uninstall Remove systemd service"
 	@echo "  service-status   Check service status"
@@ -209,6 +210,10 @@ deploy:
 	sudo systemctl daemon-reload
 	sudo systemctl enable goalstick.service
 	sudo systemctl start goalstick.service
+	@# Copy setup scripts
+	sudo mkdir -p $(DEPLOY_DIR)/scripts
+	sudo cp scripts/setup-readonly.sh $(DEPLOY_DIR)/scripts/ 2>/dev/null || true
+	sudo chmod +x $(DEPLOY_DIR)/scripts/*.sh 2>/dev/null || true
 	@echo ""
 	@echo "Deployment complete!"
 	@echo "  Install dir: $(DEPLOY_DIR)"
@@ -218,3 +223,14 @@ deploy:
 	@echo "Commands:"
 	@echo "  make service-status  - Check service status"
 	@echo "  make service-logs    - View logs"
+	@echo "  make deploy-readonly - Enable read-only filesystem (optional)"
+
+deploy-readonly: deploy
+	@echo ""
+	@echo "Setting up read-only filesystem..."
+	@if [ -f "$(DEPLOY_DIR)/scripts/setup-readonly.sh" ]; then \
+		sudo $(DEPLOY_DIR)/scripts/setup-readonly.sh; \
+	else \
+		echo "Error: setup-readonly.sh not found"; \
+		exit 1; \
+	fi

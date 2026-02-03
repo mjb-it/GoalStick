@@ -12,6 +12,71 @@ def get_install_dir() -> Path:
     return Path(__file__).parent.parent.parent
 
 
+def is_overlay_active() -> bool:
+    """Check if the system is running with an overlay filesystem."""
+    try:
+        with open("/proc/mounts", "r") as f:
+            return "overlayroot" in f.read()
+    except Exception:
+        return False
+
+
+def disable_overlay_for_update() -> bool:
+    """
+    Disable overlay filesystem to allow updates.
+    Returns True if overlay was disabled (reboot needed after update).
+    Returns False if overlay wasn't active or couldn't be disabled.
+    """
+    if not is_overlay_active():
+        return False
+    
+    try:
+        log.info("Disabling overlay filesystem for update...")
+        
+        # Write empty overlayroot config to disable it
+        result = subprocess.run(
+            ["sudo", "bash", "-c", 'echo \'overlayroot=""\' > /etc/overlayroot.conf'],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        
+        if result.returncode == 0:
+            log.info("Overlay disabled - reboot required to apply updates")
+            return True
+        else:
+            log.error(f"Failed to disable overlay: {result.stderr}")
+            return False
+            
+    except Exception as e:
+        log.error(f"Error disabling overlay: {e}")
+        return False
+
+
+def enable_overlay_after_update() -> bool:
+    """Re-enable overlay filesystem after updates are applied."""
+    try:
+        log.info("Re-enabling overlay filesystem...")
+        
+        result = subprocess.run(
+            ["sudo", "bash", "-c", 'echo \'overlayroot="tmpfs:swap=1,recurse=0"\' > /etc/overlayroot.conf'],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        
+        if result.returncode == 0:
+            log.info("Overlay re-enabled - will activate on next reboot")
+            return True
+        else:
+            log.error(f"Failed to re-enable overlay: {result.stderr}")
+            return False
+            
+    except Exception as e:
+        log.error(f"Error re-enabling overlay: {e}")
+        return False
+
+
 def check_for_updates() -> bool:
     """
     Check if there are updates available.

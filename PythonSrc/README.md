@@ -153,6 +153,43 @@ The service automatically:
 - **Daily (8 AM)**: Checks for code updates via `git pull`
 - **Weekly (Sundays)**: Runs system security updates
 
+## Read-Only Filesystem (Optional)
+
+For production devices, you can enable a read-only root filesystem to protect the SD card from corruption due to power loss:
+
+```bash
+make deploy-readonly
+sudo reboot
+```
+
+This sets up:
+- **Overlay filesystem** - Root is read-only, changes go to RAM
+- **Persistent storage** - Config, WiFi, and Bluetooth survive reboots
+- **tmpfs logs** - Logs are in RAM (lost on reboot, but viewable via `journalctl`)
+
+### Persistent Data Locations
+
+| Data | Location |
+|------|----------|
+| GoalStick config | `/persistent/goalstick/` |
+| Bluetooth pairings | `/persistent/bluetooth/` |
+| WiFi credentials | `/persistent/wpa_supplicant/` |
+
+### Helper Commands
+
+```bash
+goalstick-status  # Check if overlay is active
+goalstick-rw      # Instructions to disable overlay for manual changes
+goalstick-ro      # Re-enable overlay after changes
+```
+
+### How Updates Work with Read-Only Root
+
+When updates are available:
+1. Service detects update, disables overlay, reboots
+2. On reboot (read-write mode), applies update, re-enables overlay, reboots
+3. On final reboot, system is back to read-only with updates applied
+
 ## Troubleshooting
 
 ### Service won't start

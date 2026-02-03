@@ -1,4 +1,5 @@
 import os
+import subprocess
 import time
 import logging
 import threading
@@ -9,7 +10,7 @@ from .scorekeeper import GameSchedule, ScoreKeeper
 from .led_controller import LEDController, LEDConfig
 from .config_store import ConfigStore, UserConfig
 from .esp32_reset import ESP32Reset, ResetConfig
-from .auto_update import check_for_updates, update_code, run_system_updates
+from .auto_update import check_for_updates, update_code, run_system_updates, is_overlay_active, disable_overlay_for_update, enable_overlay_after_update
 
 log = logging.getLogger(__name__)
 
@@ -272,16 +273,36 @@ class StickCheckScheduler:
     def _run_updates(self) -> None:
         """Run code and system updates."""
         try:
+            # Check if we're running with overlay (read-only root)
+            overlay_active = is_overlay_active()
+            if overlay_active:
+                log.debug("Overlay filesystem active - updates require reboot cycle")
+            
             # Check for GoalStick code updates
             if check_for_updates():
-                log.info("GoalStick updates available - updating...")
-                if update_code():
-                    log.info("Code updated - will take effect on next restart")
+                log.info("GoalStick updates available")
+                
+                if overlay_active:
+                    # Need to disable overlay, reboot, apply update, re-enable, reboot
+                    log.info("Disabling overlay for update (will reboot twice)...")
+                    if disable_overlay_for_update():
+                        # Schedule reboot - on next boot, overlay will be off
+                        # and we can apply the update
+                        log.info("Rebooting to apply updates...")
+                        subprocess.run(["sudo", "reboot"], capture_output=True)
+                        return
+                else:
+                    # No overlay, can update directly
+                    if update_code():
+                        log.info("Code updated - will take effect on next restart")
             
             # Run system security updates (weekly, on Sundays)
             if datetime.now().weekday() == 6:  # Sunday
                 log.info("Running weekly system updates...")
-                run_system_updates()
+                if overlay_active:
+                    log.info("Skipping system updates - overlay active")
+                else:
+                    run_system_updates()
                 
         except Exception as e:
             log.error(f"Error during updates: {e}")
