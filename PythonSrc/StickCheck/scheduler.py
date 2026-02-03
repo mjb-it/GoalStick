@@ -202,8 +202,10 @@ class StickCheckScheduler:
         
         try:
             game_in_play = True
+            check_count = 0
             while self.running and game_in_play:
                 scored, game_in_play = self.scorekeeper.check_for_goal()
+                check_count += 1
                 
                 if scored:
                     goals_detected += 1
@@ -212,6 +214,10 @@ class StickCheckScheduler:
                     
                     # Trigger LED celebration
                     self.led_controller.celebrate(self.config.team_abbr)
+                
+                # Log status every ~60 seconds (12 checks at 5s interval)
+                if check_count % 12 == 0:
+                    log.info(f"Monitoring game... (score: {self.scorekeeper.last_score}, checks: {check_count})")
                 
                 if game_in_play:
                     time.sleep(self.config.check_interval)
