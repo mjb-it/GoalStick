@@ -3,7 +3,7 @@
 
 .PHONY: help android-build android-release android-clean android-install \
         python-venv python-check-venv python-test python-test-cov python-install python-clean \
-        service-install service-uninstall service-status \
+        service-install service-uninstall service-status service-logs \
         all clean test
 
 # Default target
@@ -27,6 +27,7 @@ help:
 	@echo "  service-install  Install and start systemd service"
 	@echo "  service-uninstall Remove systemd service"
 	@echo "  service-status   Check service status"
+	@echo "  service-logs     Tail the service logs"
 	@echo ""
 	@echo "Combined targets:"
 	@echo "  all              Build everything"
@@ -134,23 +135,35 @@ clean: android-clean python-clean
 # Service Targets (run on Raspberry Pi)
 # =============================================================================
 
-SERVICE_FILE := $(PYTHON_DIR)/goalstick.service
+SERVICE_TEMPLATE := $(PYTHON_DIR)/goalstick.service
+INSTALL_DIR := $(shell pwd)
 
 service-install:
 	@echo "Installing GoalStick systemd service..."
-	sudo cp $(SERVICE_FILE) /etc/systemd/system/goalstick.service
+	@echo "Install directory: $(INSTALL_DIR)"
+	@# Create config and log directories
+	sudo mkdir -p /etc/goalstick
+	sudo mkdir -p /var/log/goalstick
+	@# Generate service file from template
+	sed 's|__INSTALL_DIR__|$(INSTALL_DIR)|g' $(SERVICE_TEMPLATE) | sudo tee /etc/systemd/system/goalstick.service > /dev/null
 	sudo systemctl daemon-reload
 	sudo systemctl enable goalstick.service
 	sudo systemctl start goalstick.service
 	@echo "Service installed and started!"
+	@echo "Config: /etc/goalstick/config.json"
+	@echo "Logs:   /var/log/goalstick/goalstick.log"
 
 service-uninstall:
 	@echo "Removing GoalStick systemd service..."
 	-sudo systemctl stop goalstick.service
 	-sudo systemctl disable goalstick.service
-	-sudo rm /etc/systemd/system/goalstick.service
+	-sudo rm -f /etc/systemd/system/goalstick.service
 	sudo systemctl daemon-reload
 	@echo "Service removed!"
+	@echo "Note: Config and logs preserved in /etc/goalstick and /var/log/goalstick"
 
 service-status:
 	@sudo systemctl status goalstick.service
+
+service-logs:
+	@sudo tail -f /var/log/goalstick/goalstick.log

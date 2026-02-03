@@ -21,7 +21,7 @@ from StickCheck import (
 
 def setup_logging():
     """Set up logging with rotating file handler (weekly rotation, keep 4 weeks)."""
-    log_dir = Path.home() / ".goalstick" / "logs"
+    log_dir = Path("/var/log/goalstick")
     log_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / "goalstick.log"
     

@@ -5,16 +5,13 @@ Wants=network-online.target bluetooth.target
 
 [Service]
 Type=simple
-User=matt
-Group=matt
-WorkingDirectory=/home/matt/workspace/GoalStick/PythonSrc
-Environment=PATH=/home/matt/workspace/GoalStick/.venv/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=/home/matt/workspace/GoalStick/.venv/bin/python main.py
+User=root
+Group=root
+WorkingDirectory=__INSTALL_DIR__/PythonSrc
+Environment=PATH=__INSTALL_DIR__/.venv/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=__INSTALL_DIR__/.venv/bin/python main.py
 Restart=always
 RestartSec=10
-
-# Give access to Bluetooth and serial
-SupplementaryGroups=bluetooth dialout
 
 [Install]
 WantedBy=multi-user.target

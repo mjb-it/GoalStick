@@ -6,7 +6,7 @@ from dataclasses import dataclass, asdict
 
 log = logging.getLogger(__name__)
 
-DEFAULT_CONFIG_PATH = Path.home() / ".goalstick" / "config.json"
+DEFAULT_CONFIG_PATH = Path("/etc/goalstick/config.json")
 
 
 @dataclass
