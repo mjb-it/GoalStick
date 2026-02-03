@@ -1,7 +1,7 @@
 [Unit]
 Description=GoalStick NHL Goal Light Service
-After=network.target bluetooth.target
-Wants=bluetooth.target
+After=network-online.target bluetooth.target
+Wants=network-online.target bluetooth.target
 
 [Service]
 Type=simple
