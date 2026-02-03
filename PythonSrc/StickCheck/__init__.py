@@ -8,6 +8,7 @@ from .button_handler import ButtonHandler, ButtonConfig, ButtonState
 from .esp32_reset import ESP32Reset, ResetConfig
 from .factory_reset import factory_reset
 from .auto_update import check_for_updates, update_code, update_and_restart, run_system_updates
+from .network_watchdog import NetworkWatchdog, NetworkWatchdogConfig
 
 __all__ = [
     "GameSchedule",
@@ -34,5 +35,7 @@ __all__ = [
     "check_for_updates",
     "update_code",
     "update_and_restart",
-    "run_system_updates"
+    "run_system_updates",
+    "NetworkWatchdog",
+    "NetworkWatchdogConfig"
 ]

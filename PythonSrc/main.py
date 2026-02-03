@@ -20,7 +20,9 @@ from StickCheck import (
     ButtonConfig,
     factory_reset,
     check_for_updates,
-    update_and_restart
+    update_and_restart,
+    NetworkWatchdog,
+    NetworkWatchdogConfig
 )
 
 def setup_logging():
@@ -63,12 +65,15 @@ log = logging.getLogger(__name__)
 
 scheduler = None
 button_handler = None
+network_watchdog = None
 pairing_in_progress = False
 
 def signal_handler(sig, frame):
     print("\nShutting down gracefully...")
     if button_handler:
         button_handler.stop()
+    if network_watchdog:
+        network_watchdog.stop()
     if scheduler:
         scheduler.stop()
     sys.exit(0)
@@ -214,10 +219,15 @@ def main():
         sys.exit(0 if success else 1)
     
     # Normal operation - start scheduler with button support
+    global network_watchdog
     scheduler = StickCheckScheduler(config)
     
     # Set up button handler for pairing trigger
     button_handler = setup_button_handler(config)
+    
+    # Start network watchdog (reboots if no connectivity for 5 minutes)
+    network_watchdog = NetworkWatchdog()
+    network_watchdog.start()
     
     try:
         scheduler.start()
@@ -225,6 +235,8 @@ def main():
         print("\nShutting down gracefully...")
         if button_handler:
             button_handler.stop()
+        if network_watchdog:
+            network_watchdog.stop()
         scheduler.stop()
 
 if __name__ == "__main__":
