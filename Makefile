@@ -3,7 +3,7 @@
 
 .PHONY: help android-build android-release android-clean android-install \
         python-venv python-check-venv python-test python-test-cov python-install python-clean \
-        service-install service-uninstall service-status service-logs \
+        deploy service-install service-uninstall service-status service-logs \
         all clean test
 
 # Default target
@@ -23,8 +23,9 @@ help:
 	@echo "  python-install   Install Python package in dev mode"
 	@echo "  python-clean     Clean Python build artifacts"
 	@echo ""
-	@echo "Service targets (run on Pi):"
-	@echo "  service-install  Install and start systemd service"
+	@echo "Deployment targets (run on Pi):"
+	@echo "  deploy           Deploy to /opt/goalstick and install service"
+	@echo "  service-install  Install systemd service from current directory"
 	@echo "  service-uninstall Remove systemd service"
 	@echo "  service-status   Check service status"
 	@echo "  service-logs     Tail the service logs"
@@ -167,3 +168,51 @@ service-status:
 
 service-logs:
 	@sudo tail -f /var/log/goalstick/goalstick.log
+
+# =============================================================================
+# Deployment Target
+# =============================================================================
+
+DEPLOY_DIR := /opt/goalstick
+
+deploy:
+	@echo "Deploying GoalStick to $(DEPLOY_DIR)..."
+	@# Stop existing service if running
+	-sudo systemctl stop goalstick.service 2>/dev/null || true
+	@# Create deploy directory
+	sudo mkdir -p $(DEPLOY_DIR)
+	@# Copy Python source (excluding __pycache__, .pyc, etc.)
+	sudo rsync -av --delete \
+		--exclude='__pycache__' \
+		--exclude='*.pyc' \
+		--exclude='*.egg-info' \
+		--exclude='.pytest_cache' \
+		$(PYTHON_DIR)/ $(DEPLOY_DIR)/PythonSrc/
+	@# Copy team colors data
+	@if [ -d "data" ]; then sudo rsync -av data/ $(DEPLOY_DIR)/data/; fi
+	@# Copy .git for auto-updates
+	sudo rsync -av .git/ $(DEPLOY_DIR)/.git/
+	@# Create virtual environment if needed
+	@if [ ! -d "$(DEPLOY_DIR)/.venv" ]; then \
+		echo "Creating virtual environment..."; \
+		sudo python3 -m venv $(DEPLOY_DIR)/.venv --system-site-packages; \
+	fi
+	@# Install package
+	sudo $(DEPLOY_DIR)/.venv/bin/pip install -e "$(DEPLOY_DIR)/PythonSrc[dev]"
+	@# Create config and log directories
+	sudo mkdir -p /etc/goalstick
+	sudo mkdir -p /var/log/goalstick
+	@# Install service
+	sed 's|__INSTALL_DIR__|$(DEPLOY_DIR)|g' $(SERVICE_TEMPLATE) | sudo tee /etc/systemd/system/goalstick.service > /dev/null
+	sudo systemctl daemon-reload
+	sudo systemctl enable goalstick.service
+	sudo systemctl start goalstick.service
+	@echo ""
+	@echo "Deployment complete!"
+	@echo "  Install dir: $(DEPLOY_DIR)"
+	@echo "  Config:      /etc/goalstick/config.json"
+	@echo "  Logs:        /var/log/goalstick/goalstick.log"
+	@echo ""
+	@echo "Commands:"
+	@echo "  make service-status  - Check service status"
+	@echo "  make service-logs    - View logs"
