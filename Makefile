@@ -3,6 +3,7 @@
 
 .PHONY: help android-build android-release android-clean android-install \
         python-venv python-check-venv python-test python-test-cov python-install python-clean \
+        service-install service-uninstall service-status \
         all clean test
 
 # Default target
@@ -21,6 +22,11 @@ help:
 	@echo "  python-test-cov  Run tests with coverage report"
 	@echo "  python-install   Install Python package in dev mode"
 	@echo "  python-clean     Clean Python build artifacts"
+	@echo ""
+	@echo "Service targets (run on Pi):"
+	@echo "  service-install  Install and start systemd service"
+	@echo "  service-uninstall Remove systemd service"
+	@echo "  service-status   Check service status"
 	@echo ""
 	@echo "Combined targets:"
 	@echo "  all              Build everything"
@@ -123,3 +129,28 @@ test: python-test
 
 clean: android-clean python-clean
 	@echo "Clean complete!"
+
+# =============================================================================
+# Service Targets (run on Raspberry Pi)
+# =============================================================================
+
+SERVICE_FILE := $(PYTHON_DIR)/goalstick.service
+
+service-install:
+	@echo "Installing GoalStick systemd service..."
+	sudo cp $(SERVICE_FILE) /etc/systemd/system/goalstick.service
+	sudo systemctl daemon-reload
+	sudo systemctl enable goalstick.service
+	sudo systemctl start goalstick.service
+	@echo "Service installed and started!"
+
+service-uninstall:
+	@echo "Removing GoalStick systemd service..."
+	-sudo systemctl stop goalstick.service
+	-sudo systemctl disable goalstick.service
+	-sudo rm /etc/systemd/system/goalstick.service
+	sudo systemctl daemon-reload
+	@echo "Service removed!"
+
+service-status:
+	@sudo systemctl status goalstick.service
