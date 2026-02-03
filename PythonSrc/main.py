@@ -25,7 +25,8 @@ from StickCheck import (
     NetworkWatchdogConfig,
     StatusLED,
     StatusLEDConfig,
-    DeviceState
+    DeviceState,
+    is_wifi_configured
 )
 
 def setup_logging():
@@ -236,6 +237,24 @@ def main():
     )
     status_led = StatusLED(config=led_config)
     status_led.start()
+    
+    # Check if WiFi is configured - if not, show magenta and wait for pairing
+    if not is_wifi_configured():
+        log.warning("WiFi not configured - waiting for Bluetooth setup")
+        status_led.set_state(DeviceState.NO_WIFI_CONFIG)
+        # Don't start scheduler or network watchdog without WiFi
+        # Just wait for button press to enter pairing mode
+        button_handler = setup_button_handler(config)
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            pass
+        finally:
+            if button_handler:
+                button_handler.stop()
+            status_led.stop()
+        return
     
     # Pass status LED to scheduler for state updates
     scheduler.set_status_led(status_led)

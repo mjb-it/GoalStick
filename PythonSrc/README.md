@@ -56,6 +56,7 @@ Use high-value resistors (1kΩ+) to keep the LED dim.
 |-------|---------|---------|
 | Off | - | Normal operation |
 | Yellow | Solid | Booting |
+| Magenta | Slow blink | WiFi not configured (needs setup) |
 | Blue | Slow blink | Bluetooth pairing mode |
 | Cyan | Slow blink | Updating |
 | Red | Solid | Error |
@@ -63,7 +64,34 @@ Use high-value resistors (1kΩ+) to keep the LED dim.
 
 ## Installation
 
-### Prerequisites
+### Option 1: Pre-Built Image (Easiest)
+
+Use the first-boot script to create a ready-to-distribute image:
+
+1. Flash **Raspberry Pi OS Lite 64-bit** with Raspberry Pi Imager
+2. In imager settings (⚙️), configure:
+   - Enable SSH
+   - Set hostname to `goalstick`
+   - Configure your WiFi (temporary, will be wiped)
+   - Set username/password
+3. After flashing, mount the boot partition and copy the setup script:
+   ```bash
+   cp scripts/firstboot-setup.sh /Volumes/bootfs/firstboot-setup.sh
+   ```
+4. Edit `/Volumes/bootfs/cmdline.txt` and add to the **end of the existing line**:
+   ```
+    systemd.run=/boot/firmware/firstboot-setup.sh systemd.run_success_action=reboot
+   ```
+5. Eject and boot the Pi
+6. Wait ~10 minutes for setup to complete (LED will be yellow, then cyan during update)
+7. Pi will reboot with **WiFi wiped** - use the Android app to configure
+
+> **Note**: The first-boot script wipes all WiFi credentials after installation,
+> making the image safe to distribute without exposing your network password.
+
+### Option 2: Manual Installation
+
+#### Prerequisites
 
 Install system dependencies (required for D-Bus and GPIO):
 
@@ -80,7 +108,7 @@ sudo systemctl daemon-reload
 sudo systemctl restart bluetooth
 ```
 
-### Quick Deploy (Production)
+#### Quick Deploy (Production)
 
 Clone and deploy to `/opt/goalstick`:
 

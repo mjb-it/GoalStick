@@ -22,6 +22,7 @@ class DeviceState(Enum):
     PAIRING = "pairing"           # Blue blink - Bluetooth pairing mode
     ERROR = "error"               # Red solid - error state
     NO_NETWORK = "no_network"     # Red blink - no network connectivity
+    NO_WIFI_CONFIG = "no_wifi"    # Magenta blink - WiFi not configured
     UPDATING = "updating"         # Cyan blink - updating
 
 
@@ -63,6 +64,7 @@ class StatusLED:
         DeviceState.PAIRING:          ("blue", "slow_blink"),
         DeviceState.ERROR:            ("red", "solid"),
         DeviceState.NO_NETWORK:       ("red", "fast_blink"),
+        DeviceState.NO_WIFI_CONFIG:   ("magenta", "slow_blink"),
         DeviceState.UPDATING:         ("cyan", "slow_blink"),
     }
     

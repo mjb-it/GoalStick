@@ -7,6 +7,45 @@ log = logging.getLogger(__name__)
 WPA_SUPPLICANT_CONF = Path("/etc/wpa_supplicant/wpa_supplicant.conf")
 
 
+def is_wifi_configured() -> bool:
+    """
+    Check if WiFi is configured on the system.
+    
+    Returns:
+        True if WiFi credentials are configured, False otherwise
+    """
+    try:
+        # Check NetworkManager first
+        result = subprocess.run(
+            ["nmcli", "-t", "-f", "TYPE,NAME", "connection", "show"],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode == 0:
+            for line in result.stdout.strip().split('\n'):
+                if line.startswith('802-11-wireless:'):
+                    return True
+        
+        # Fall back to checking wpa_supplicant.conf
+        if WPA_SUPPLICANT_CONF.exists():
+            content = WPA_SUPPLICANT_CONF.read_text()
+            if 'network=' in content and 'ssid=' in content:
+                return True
+        
+        # Check alternative wpa_supplicant location
+        alt_conf = Path("/etc/wpa_supplicant/wpa_supplicant-wlan0.conf")
+        if alt_conf.exists():
+            content = alt_conf.read_text()
+            if 'network=' in content and 'ssid=' in content:
+                return True
+        
+        return False
+        
+    except Exception as e:
+        log.debug(f"Error checking WiFi config: {e}")
+        return False
+
+
 def configure_wifi(ssid: str, password: str) -> bool:
     """
     Configure WiFi on the Raspberry Pi using wpa_supplicant.

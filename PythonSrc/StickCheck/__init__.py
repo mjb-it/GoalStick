@@ -1,6 +1,7 @@
 from .scorekeeper import GameSchedule, ScoreKeeper
 from .scheduler import StickCheckScheduler, SchedulerConfig, HockeySeasonDetector
 from .led_controller import LEDController, LEDConfig
+from .wifi_config import configure_wifi, is_wifi_configured
 from .config_store import ConfigStore, UserConfig
 from .bluetooth_pairing import BluetoothPairing, BluetoothConfig, PairingStatus
 from .bluetooth_server import BluetoothServer, BluetoothServerConfig, ReceivedConfig
@@ -41,5 +42,7 @@ __all__ = [
     "NetworkWatchdogConfig",
     "StatusLED",
     "StatusLEDConfig",
-    "DeviceState"
+    "DeviceState",
+    "configure_wifi",
+    "is_wifi_configured"
 ]
