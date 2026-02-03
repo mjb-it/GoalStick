@@ -22,7 +22,10 @@ from StickCheck import (
     check_for_updates,
     update_and_restart,
     NetworkWatchdog,
-    NetworkWatchdogConfig
+    NetworkWatchdogConfig,
+    StatusLED,
+    StatusLEDConfig,
+    DeviceState
 )
 
 def setup_logging():
@@ -66,6 +69,7 @@ log = logging.getLogger(__name__)
 scheduler = None
 button_handler = None
 network_watchdog = None
+status_led = None
 pairing_in_progress = False
 
 def signal_handler(sig, frame):
@@ -74,6 +78,8 @@ def signal_handler(sig, frame):
         button_handler.stop()
     if network_watchdog:
         network_watchdog.stop()
+    if status_led:
+        status_led.stop()
     if scheduler:
         scheduler.stop()
     sys.exit(0)
@@ -219,8 +225,20 @@ def main():
         sys.exit(0 if success else 1)
     
     # Normal operation - start scheduler with button support
-    global network_watchdog
+    global network_watchdog, status_led
     scheduler = StickCheckScheduler(config)
+    
+    # Set up status LED
+    led_config = StatusLEDConfig(
+        red_pin=config.status_led_red_pin,
+        green_pin=config.status_led_green_pin,
+        blue_pin=config.status_led_blue_pin
+    )
+    status_led = StatusLED(config=led_config)
+    status_led.start()
+    
+    # Pass status LED to scheduler for state updates
+    scheduler.set_status_led(status_led)
     
     # Set up button handler for pairing trigger
     button_handler = setup_button_handler(config)
@@ -237,6 +255,8 @@ def main():
             button_handler.stop()
         if network_watchdog:
             network_watchdog.stop()
+        if status_led:
+            status_led.stop()
         scheduler.stop()
 
 if __name__ == "__main__":

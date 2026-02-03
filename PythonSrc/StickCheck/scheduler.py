@@ -46,6 +46,10 @@ class SchedulerConfig:
     # ESP32 reset settings
     esp32_reset_pin: int = 27  # BCM GPIO pin connected to ESP32 EN pin
     esp32_reset_retries: int = 2  # Number of reset attempts before giving up
+    # Status LED settings (RGB LED)
+    status_led_red_pin: int = 22    # BCM GPIO pin for red
+    status_led_green_pin: int = 23  # BCM GPIO pin for green
+    status_led_blue_pin: int = 24   # BCM GPIO pin for blue
 
 
 class HockeySeasonDetector:
@@ -102,6 +106,19 @@ class StickCheckScheduler:
         self._watchdog_thread = None
         if WATCHDOG_AVAILABLE:
             self._watchdog_notifier = sdnotify.SystemdNotifier()
+        
+        # Status LED (set externally via set_status_led)
+        self._status_led = None
+    
+    def set_status_led(self, status_led) -> None:
+        """Set the status LED controller for state updates."""
+        self._status_led = status_led
+    
+    def _update_status(self, state) -> None:
+        """Update the status LED if available."""
+        if self._status_led:
+            from .status_led import DeviceState
+            self._status_led.set_state(state)
     
     def set_team(self, team_abbr: str) -> bool:
         team_abbr = team_abbr.upper()
@@ -308,31 +325,40 @@ class StickCheckScheduler:
             log.error(f"Error during updates: {e}")
     
     def run_daily_cycle(self) -> None:
+        from .status_led import DeviceState
+        
         # Run updates at the start of each daily cycle
+        self._update_status(DeviceState.UPDATING)
         self._run_updates()
         
         if not HockeySeasonDetector.is_hockey_season():
             log.info("Not hockey season - sleeping until tomorrow")
+            self._update_status(DeviceState.READY)
             self._sleep_until_daily_check()
             return
         
         log.info("Starting daily check for games")
         
         if self._setup_today_game():
-            # Game found today
+            # Game found today - waiting for game time
+            self._update_status(DeviceState.WAITING_FOR_GAME)
             self._sleep_until_game_start()
             
             # Wait for game to actually start (with slower polling)
             if self._wait_for_game_start():
+                self._update_status(DeviceState.GAME_LIVE)
                 self._monitor_live_game()
                 log.info("Game ended - sleeping until tomorrow's check")
+                self._update_status(DeviceState.READY)
                 self._sleep_until_daily_check()
             else:
                 log.info("Game not in progress or already finished")
+                self._update_status(DeviceState.READY)
                 self._sleep_until_daily_check()
         else:
             # No game today, sleep until tomorrow
             log.info("No game to monitor today")
+            self._update_status(DeviceState.READY)
             self._sleep_until_daily_check()
     
     def _start_watchdog(self) -> None:

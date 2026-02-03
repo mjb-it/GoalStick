@@ -39,6 +39,30 @@ Python service for monitoring NHL games and triggering LED celebrations on a Ras
 - **Hold 3 seconds**: Enter Bluetooth pairing mode
 - **Hold 10 seconds**: Factory reset (clears WiFi, Bluetooth, config)
 
+### Status LED (RGB, Common Cathode)
+
+| Pi Zero 2W Pin | Function | LED Pin |
+|----------------|----------|---------|
+| GPIO 22        | Red      | R (via resistor) |
+| GPIO 23        | Green    | G (via resistor) |
+| GPIO 24        | Blue     | B (via resistor) |
+| GND            | Ground   | Common Cathode |
+
+Use high-value resistors (1kΩ+) to keep the LED dim.
+
+**LED States:**
+
+| Color | Pattern | Meaning |
+|-------|---------|---------|
+| Yellow | Solid | Booting |
+| Green | Solid | Ready (no game today) |
+| Green | Slow blink | Waiting for game to start |
+| Green | Fast blink | Game in progress |
+| Blue | Slow blink | Bluetooth pairing mode |
+| Cyan | Slow blink | Updating |
+| Red | Solid | Error |
+| Red | Fast blink | No network connectivity |
+
 ## Installation
 
 ### Prerequisites
