@@ -6,6 +6,8 @@ from .bluetooth_pairing import BluetoothPairing, BluetoothConfig, PairingStatus
 from .bluetooth_server import BluetoothServer, BluetoothServerConfig, ReceivedConfig
 from .button_handler import ButtonHandler, ButtonConfig, ButtonState
 from .esp32_reset import ESP32Reset, ResetConfig
+from .factory_reset import factory_reset
+from .auto_update import check_for_updates, update_code, update_and_restart, run_system_updates
 
 __all__ = [
     "GameSchedule",
@@ -27,5 +29,10 @@ __all__ = [
     "ButtonConfig",
     "ButtonState",
     "ESP32Reset",
-    "ResetConfig"
+    "ResetConfig",
+    "factory_reset",
+    "check_for_updates",
+    "update_code",
+    "update_and_restart",
+    "run_system_updates"
 ]

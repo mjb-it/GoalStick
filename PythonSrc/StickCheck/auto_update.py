@@ -1,0 +1,162 @@
+import logging
+import subprocess
+import sys
+from pathlib import Path
+
+log = logging.getLogger(__name__)
+
+
+def get_install_dir() -> Path:
+    """Get the GoalStick installation directory."""
+    # This file is in PythonSrc/StickCheck/, so go up two levels
+    return Path(__file__).parent.parent.parent
+
+
+def check_for_updates() -> bool:
+    """
+    Check if there are updates available.
+    Returns True if updates are available.
+    """
+    install_dir = get_install_dir()
+    
+    try:
+        # Fetch latest from remote
+        result = subprocess.run(
+            ["git", "fetch"],
+            cwd=install_dir,
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+        
+        if result.returncode != 0:
+            log.warning(f"Git fetch failed: {result.stderr}")
+            return False
+        
+        # Check if we're behind
+        result = subprocess.run(
+            ["git", "status", "-uno"],
+            cwd=install_dir,
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        
+        return "Your branch is behind" in result.stdout
+        
+    except Exception as e:
+        log.error(f"Error checking for updates: {e}")
+        return False
+
+
+def update_code() -> bool:
+    """
+    Pull latest code and reinstall package.
+    Returns True if successful.
+    """
+    install_dir = get_install_dir()
+    venv_pip = install_dir / ".venv" / "bin" / "pip"
+    
+    try:
+        log.info("Pulling latest code...")
+        
+        # Git pull
+        result = subprocess.run(
+            ["git", "pull", "--ff-only"],
+            cwd=install_dir,
+            capture_output=True,
+            text=True,
+            timeout=120
+        )
+        
+        if result.returncode != 0:
+            log.error(f"Git pull failed: {result.stderr}")
+            return False
+        
+        if "Already up to date" in result.stdout:
+            log.info("Code is already up to date")
+            return True
+        
+        log.info(f"Updated: {result.stdout.strip()}")
+        
+        # Reinstall package to pick up any dependency changes
+        log.info("Reinstalling package...")
+        result = subprocess.run(
+            [str(venv_pip), "install", "-e", "PythonSrc[dev]"],
+            cwd=install_dir,
+            capture_output=True,
+            text=True,
+            timeout=300
+        )
+        
+        if result.returncode != 0:
+            log.error(f"Pip install failed: {result.stderr}")
+            return False
+        
+        log.info("Code update complete!")
+        return True
+        
+    except Exception as e:
+        log.error(f"Error updating code: {e}")
+        return False
+
+
+def update_and_restart() -> None:
+    """
+    Update code and restart the service.
+    This function does not return if successful.
+    """
+    if update_code():
+        log.info("Restarting service to apply updates...")
+        subprocess.run(
+            ["sudo", "systemctl", "restart", "goalstick"],
+            capture_output=True,
+            text=True
+        )
+        # If we get here, the restart failed
+        log.error("Service restart may have failed")
+
+
+def run_system_updates() -> bool:
+    """
+    Run system package updates (security patches).
+    Returns True if successful.
+    """
+    try:
+        log.info("Running system updates...")
+        
+        # Update package lists
+        result = subprocess.run(
+            ["sudo", "apt-get", "update", "-qq"],
+            capture_output=True,
+            text=True,
+            timeout=300
+        )
+        
+        if result.returncode != 0:
+            log.warning(f"apt-get update failed: {result.stderr}")
+            return False
+        
+        # Install security updates only (unattended-upgrades style)
+        result = subprocess.run(
+            ["sudo", "apt-get", "upgrade", "-y", "-qq", 
+             "-o", "Dpkg::Options::=--force-confold",
+             "-o", "Dpkg::Options::=--force-confdef"],
+            capture_output=True,
+            text=True,
+            timeout=1800  # 30 minutes max
+        )
+        
+        if result.returncode != 0:
+            log.warning(f"apt-get upgrade failed: {result.stderr}")
+            return False
+        
+        log.info("System updates complete")
+        return True
+        
+    except subprocess.TimeoutExpired:
+        log.error("System update timed out")
+        return False
+    except Exception as e:
+        log.error(f"Error running system updates: {e}")
+        return False

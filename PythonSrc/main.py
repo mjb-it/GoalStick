@@ -1,6 +1,7 @@
 import logging
 import logging.handlers
 import signal
+import subprocess
 import sys
 import argparse
 from pathlib import Path
@@ -16,7 +17,10 @@ from StickCheck import (
     ConfigStore,
     PairingStatus,
     ButtonHandler,
-    ButtonConfig
+    ButtonConfig,
+    factory_reset,
+    check_for_updates,
+    update_and_restart
 )
 
 def setup_logging():
@@ -79,21 +83,33 @@ def setup_button_handler(config: SchedulerConfig):
             return
         
         pairing_in_progress = True
-        log.info("Button held - initiating Bluetooth pairing...")
+        log.info("Button held (3s) - initiating Bluetooth pairing...")
         try:
             run_pairing_mode(config)
         finally:
             pairing_in_progress = False
     
+    def on_factory_reset():
+        log.warning("Button held (10s) - initiating FACTORY RESET...")
+        if factory_reset():
+            log.info("Factory reset complete - rebooting...")
+            subprocess.run(["sudo", "reboot"], capture_output=True)
+        else:
+            log.error("Factory reset failed")
+    
     btn_config = ButtonConfig(
         gpio_pin=config.pairing_button_pin,
-        hold_time=config.pairing_button_hold_time
+        hold_time=config.pairing_button_hold_time,
+        long_hold_time=config.factory_reset_hold_time
     )
     handler = ButtonHandler(config=btn_config)
     handler.set_on_hold(on_button_hold)
+    handler.set_on_long_hold(on_factory_reset)
     
     if handler.start():
-        log.info(f"Button handler started on GPIO {config.pairing_button_pin} (hold {config.pairing_button_hold_time}s for pairing)")
+        log.info(f"Button handler started on GPIO {config.pairing_button_pin}")
+        log.info(f"  - Hold {config.pairing_button_hold_time}s for pairing mode")
+        log.info(f"  - Hold {config.factory_reset_hold_time}s for factory reset")
         return handler
     else:
         log.warning("Button handler could not start - pairing via button disabled")

@@ -7,6 +7,7 @@ from .scorekeeper import GameSchedule, ScoreKeeper
 from .led_controller import LEDController, LEDConfig
 from .config_store import ConfigStore, UserConfig
 from .esp32_reset import ESP32Reset, ResetConfig
+from .auto_update import check_for_updates, update_code, run_system_updates
 
 log = logging.getLogger(__name__)
 
@@ -30,6 +31,7 @@ class SchedulerConfig:
     # Button settings
     pairing_button_pin: int = 17  # BCM GPIO pin for pairing button
     pairing_button_hold_time: float = 3.0  # Seconds to hold for pairing
+    factory_reset_hold_time: float = 10.0  # Seconds to hold for factory reset
     # ESP32 reset settings
     esp32_reset_pin: int = 27  # BCM GPIO pin connected to ESP32 EN pin
     esp32_reset_retries: int = 2  # Number of reset attempts before giving up
@@ -251,7 +253,27 @@ class StickCheckScheduler:
         log.warning("Game did not start within expected time")
         return False
     
+    def _run_updates(self) -> None:
+        """Run code and system updates."""
+        try:
+            # Check for GoalStick code updates
+            if check_for_updates():
+                log.info("GoalStick updates available - updating...")
+                if update_code():
+                    log.info("Code updated - will take effect on next restart")
+            
+            # Run system security updates (weekly, on Sundays)
+            if datetime.now().weekday() == 6:  # Sunday
+                log.info("Running weekly system updates...")
+                run_system_updates()
+                
+        except Exception as e:
+            log.error(f"Error during updates: {e}")
+    
     def run_daily_cycle(self) -> None:
+        # Run updates at the start of each daily cycle
+        self._run_updates()
+        
         if not HockeySeasonDetector.is_hockey_season():
             log.info("Not hockey season - sleeping until tomorrow")
             self._sleep_until_daily_check()

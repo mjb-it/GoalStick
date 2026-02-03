@@ -24,7 +24,8 @@ class ButtonState(Enum):
 @dataclass
 class ButtonConfig:
     gpio_pin: int = 17  # BCM pin number
-    hold_time: float = 3.0  # Seconds to hold for pairing trigger
+    hold_time: float = 3.0  # Seconds to hold for first action (pairing)
+    long_hold_time: float = 10.0  # Seconds to hold for second action (factory reset)
     debounce_time: float = 0.05  # 50ms debounce
     pull_up: bool = True  # Use internal pull-up resistor
 
@@ -35,12 +36,18 @@ class ButtonHandler:
         self._running = False
         self._monitor_thread: Optional[threading.Thread] = None
         self._on_hold_callback: Optional[Callable[[], None]] = None
+        self._on_long_hold_callback: Optional[Callable[[], None]] = None
         self._on_press_callback: Optional[Callable[[], None]] = None
         self._button_state = ButtonState.RELEASED
         self._press_start_time: Optional[float] = None
     
     def set_on_hold(self, callback: Callable[[], None]) -> None:
+        """Set callback for short hold (default 3s)."""
         self._on_hold_callback = callback
+    
+    def set_on_long_hold(self, callback: Callable[[], None]) -> None:
+        """Set callback for long hold (default 10s)."""
+        self._on_long_hold_callback = callback
     
     def set_on_press(self, callback: Callable[[], None]) -> None:
         self._on_press_callback = callback
@@ -83,6 +90,7 @@ class ButtonHandler:
     def _monitor_loop(self) -> None:
         log.info("Button monitor started")
         hold_triggered = False
+        long_hold_triggered = False
         
         while self._running:
             is_pressed = self._is_button_pressed()
@@ -93,21 +101,34 @@ class ButtonHandler:
                     self._button_state = ButtonState.PRESSED
                     self._press_start_time = time.time()
                     hold_triggered = False
+                    long_hold_triggered = False
                     log.debug("Button pressed")
                     
                     if self._on_press_callback:
                         self._on_press_callback()
                 
-                elif self._button_state == ButtonState.PRESSED:
-                    # Check if held long enough
+                elif self._button_state in (ButtonState.PRESSED, ButtonState.HELD):
+                    # Check hold duration
                     elapsed = time.time() - self._press_start_time
-                    if elapsed >= self.config.hold_time and not hold_triggered:
+                    
+                    # Check for long hold first (10s default)
+                    if elapsed >= self.config.long_hold_time and not long_hold_triggered:
+                        long_hold_triggered = True
+                        log.info(f"Button held for {self.config.long_hold_time}s - triggering LONG HOLD action")
+                        
+                        if self._on_long_hold_callback:
+                            threading.Thread(
+                                target=self._on_long_hold_callback,
+                                daemon=True
+                            ).start()
+                    
+                    # Check for short hold (3s default) - only if long hold not triggered
+                    elif elapsed >= self.config.hold_time and not hold_triggered and not long_hold_triggered:
                         self._button_state = ButtonState.HELD
                         hold_triggered = True
-                        log.info(f"Button held for {self.config.hold_time}s - triggering action")
+                        log.info(f"Button held for {self.config.hold_time}s - triggering hold action")
                         
                         if self._on_hold_callback:
-                            # Run callback in separate thread to not block monitoring
                             threading.Thread(
                                 target=self._on_hold_callback,
                                 daemon=True
