@@ -1,5 +1,7 @@
+import os
 import time
 import logging
+import threading
 from datetime import datetime, timedelta
 from typing import Optional, Callable
 from dataclasses import dataclass
@@ -10,6 +12,14 @@ from .esp32_reset import ESP32Reset, ResetConfig
 from .auto_update import check_for_updates, update_code, run_system_updates
 
 log = logging.getLogger(__name__)
+
+# Systemd watchdog support
+try:
+    import sdnotify
+    WATCHDOG_AVAILABLE = True
+except ImportError:
+    WATCHDOG_AVAILABLE = False
+    log.debug("sdnotify not available - watchdog disabled")
 
 
 @dataclass
@@ -85,6 +95,12 @@ class StickCheckScheduler:
         # Initialize ESP32 reset controller
         reset_config = ResetConfig(reset_pin=self.config.esp32_reset_pin)
         self.esp32_reset = ESP32Reset(config=reset_config)
+        
+        # Initialize watchdog
+        self._watchdog_notifier = None
+        self._watchdog_thread = None
+        if WATCHDOG_AVAILABLE:
+            self._watchdog_notifier = sdnotify.SystemdNotifier()
     
     def set_team(self, team_abbr: str) -> bool:
         team_abbr = team_abbr.upper()
@@ -298,9 +314,38 @@ class StickCheckScheduler:
             log.info("No game to monitor today")
             self._sleep_until_daily_check()
     
+    def _start_watchdog(self) -> None:
+        """Start background thread to ping systemd watchdog."""
+        if not self._watchdog_notifier:
+            return
+        
+        def watchdog_loop():
+            # Notify systemd we're ready
+            self._watchdog_notifier.notify("READY=1")
+            log.info("Systemd watchdog started")
+            
+            while self.running:
+                self._watchdog_notifier.notify("WATCHDOG=1")
+                time.sleep(30)  # Ping every 30s (watchdog timeout is 60s)
+        
+        self._watchdog_thread = threading.Thread(
+            target=watchdog_loop,
+            daemon=True,
+            name="WatchdogThread"
+        )
+        self._watchdog_thread.start()
+    
+    def _stop_watchdog(self) -> None:
+        """Notify systemd we're stopping."""
+        if self._watchdog_notifier:
+            self._watchdog_notifier.notify("STOPPING=1")
+    
     def start(self) -> None:
         log.info(f"Starting StickCheck scheduler for team: {self.config.team_abbr}")
         self.running = True
+        
+        # Start watchdog thread
+        self._start_watchdog()
         
         try:
             while self.running:
@@ -310,6 +355,7 @@ class StickCheckScheduler:
         except Exception as e:
             log.error(f"Scheduler error: {e}")
         finally:
+            self._stop_watchdog()
             self.running = False
             log.info("Scheduler stopped")
     

@@ -2,6 +2,8 @@
 Description=GoalStick NHL Goal Light Service
 After=network-online.target bluetooth.target
 Wants=network-online.target bluetooth.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -10,8 +12,22 @@ Group=root
 WorkingDirectory=__INSTALL_DIR__/PythonSrc
 Environment=PATH=__INSTALL_DIR__/.venv/bin:/usr/local/bin:/usr/bin:/bin
 ExecStart=__INSTALL_DIR__/.venv/bin/python main.py
+
+# Restart policy - always restart on failure
 Restart=always
 RestartSec=10
+
+# Watchdog - systemd will kill and restart if no ping within 60s
+WatchdogSec=60
+
+# Resource limits to prevent runaway processes
+MemoryMax=256M
+CPUQuota=50%
+
+# Security hardening
+NoNewPrivileges=false
+ProtectSystem=false
+ProtectHome=false
 
 [Install]
 WantedBy=multi-user.target

@@ -11,6 +11,7 @@ dependencies = [
     "nhl-api-py>=3.0.0",
     "python-dateutil",
     "pyserial",
+    "sdnotify",
 ]
 
 [project.optional-dependencies]
