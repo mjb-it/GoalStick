@@ -192,6 +192,8 @@ deploy:
 	@if [ -d "data" ]; then sudo rsync -av data/ $(DEPLOY_DIR)/data/; fi
 	@# Copy .git for auto-updates
 	sudo rsync -av .git/ $(DEPLOY_DIR)/.git/
+	@# Mark directory as safe for git (needed for auto-updates when running as root)
+	sudo git config --global --add safe.directory $(DEPLOY_DIR)
 	@# Create virtual environment if needed
 	@if [ ! -d "$(DEPLOY_DIR)/.venv" ]; then \
 		echo "Creating virtual environment..."; \
