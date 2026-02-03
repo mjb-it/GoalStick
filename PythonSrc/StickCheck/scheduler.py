@@ -331,9 +331,11 @@ class StickCheckScheduler:
         self._update_status(DeviceState.UPDATING)
         self._run_updates()
         
+        # Turn off LED for normal operation
+        self._update_status(DeviceState.OFF)
+        
         if not HockeySeasonDetector.is_hockey_season():
             log.info("Not hockey season - sleeping until tomorrow")
-            self._update_status(DeviceState.READY)
             self._sleep_until_daily_check()
             return
         
@@ -341,24 +343,19 @@ class StickCheckScheduler:
         
         if self._setup_today_game():
             # Game found today - waiting for game time
-            self._update_status(DeviceState.WAITING_FOR_GAME)
             self._sleep_until_game_start()
             
             # Wait for game to actually start (with slower polling)
             if self._wait_for_game_start():
-                self._update_status(DeviceState.GAME_LIVE)
                 self._monitor_live_game()
                 log.info("Game ended - sleeping until tomorrow's check")
-                self._update_status(DeviceState.READY)
                 self._sleep_until_daily_check()
             else:
                 log.info("Game not in progress or already finished")
-                self._update_status(DeviceState.READY)
                 self._sleep_until_daily_check()
         else:
             # No game today, sleep until tomorrow
             log.info("No game to monitor today")
-            self._update_status(DeviceState.READY)
             self._sleep_until_daily_check()
     
     def _start_watchdog(self) -> None:

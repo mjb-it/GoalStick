@@ -50,14 +50,12 @@ Python service for monitoring NHL games and triggering LED celebrations on a Ras
 
 Use high-value resistors (1kΩ+) to keep the LED dim.
 
-**LED States:**
+**LED States** (LED is off during normal operation):
 
 | Color | Pattern | Meaning |
 |-------|---------|---------|
+| Off | - | Normal operation |
 | Yellow | Solid | Booting |
-| Green | Solid | Ready (no game today) |
-| Green | Slow blink | Waiting for game to start |
-| Green | Fast blink | Game in progress |
 | Blue | Slow blink | Bluetooth pairing mode |
 | Cyan | Slow blink | Updating |
 | Red | Solid | Error |

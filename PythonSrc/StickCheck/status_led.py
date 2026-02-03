@@ -17,10 +17,8 @@ except ImportError:
 
 class DeviceState(Enum):
     """Device states with corresponding LED colors."""
+    OFF = "off"                   # LED off - normal operation
     BOOTING = "booting"           # Yellow - starting up
-    READY = "ready"               # Green solid - ready, no game today
-    WAITING_FOR_GAME = "waiting"  # Green slow blink - waiting for game to start
-    GAME_LIVE = "game_live"       # Green fast blink - game in progress
     PAIRING = "pairing"           # Blue blink - Bluetooth pairing mode
     ERROR = "error"               # Red solid - error state
     NO_NETWORK = "no_network"     # Red blink - no network connectivity
@@ -58,12 +56,10 @@ class StatusLED:
         "white":   (1, 1, 1),
     }
     
-    # State to pattern mapping
+    # State to pattern mapping - only special states have LED on
     STATE_PATTERNS = {
+        DeviceState.OFF:              ("off", "solid"),
         DeviceState.BOOTING:          ("yellow", "solid"),
-        DeviceState.READY:            ("green", "solid"),
-        DeviceState.WAITING_FOR_GAME: ("green", "slow_blink"),
-        DeviceState.GAME_LIVE:        ("green", "fast_blink"),
         DeviceState.PAIRING:          ("blue", "slow_blink"),
         DeviceState.ERROR:            ("red", "solid"),
         DeviceState.NO_NETWORK:       ("red", "fast_blink"),
