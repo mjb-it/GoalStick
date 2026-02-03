@@ -215,8 +215,9 @@ class StickCheckScheduler:
                     # Trigger LED celebration
                     self.led_controller.celebrate(self.config.team_abbr)
                 
-                # Log every API check
-                log.info(f"Checking... (score: {self.scorekeeper.last_score}, in_play: {game_in_play})")
+                # Log status every ~60 seconds (12 checks at 5s interval)
+                if check_count % 12 == 0:
+                    log.info(f"Monitoring... (score: {self.scorekeeper.last_score}, checks: {check_count})")
                 
                 if game_in_play:
                     time.sleep(self.config.check_interval)
