@@ -14,7 +14,7 @@ log = logging.getLogger(__name__)
 @dataclass
 class SchedulerConfig:
     team_abbr: str = None  # If None, will load from persistent config
-    check_interval: float = 5.0  # seconds during live game
+    check_interval: float = 2.0  # seconds during live game
     pre_game_check_interval: float = 30.0  # seconds when waiting for game to start
     daily_check_hour: int = 8  # hour to check for games (24-hour format)
     pre_game_wake_minutes: int = 5  # minutes before game to wake up
@@ -214,10 +214,6 @@ class StickCheckScheduler:
                     
                     # Trigger LED celebration
                     self.led_controller.celebrate(self.config.team_abbr)
-                
-                # Log status every ~60 seconds (12 checks at 5s interval)
-                if check_count % 12 == 0:
-                    log.info(f"Monitoring... (score: {self.scorekeeper.last_score}, checks: {check_count})")
                 
                 if game_in_play:
                     time.sleep(self.config.check_interval)
