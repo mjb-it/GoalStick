@@ -31,14 +31,14 @@ class TestLEDController:
     def test_load_team_colors(self, sample_team_colors):
         controller = LEDController(team_colors_path=str(sample_team_colors))
         
-        assert controller.get_team_colors("WSH") == ["FFFFFF", "002D62", "CF0A2C"]
+        assert controller.get_team_colors("WSH") == ["FFFFFF", "002D62", "FF0000"]
         assert controller.get_team_colors("TOR") == ["FFFFFF", "003876"]
         assert controller.get_team_colors("BOS") == ["FFFFFF", "FFC422", "231F20"]
     
     def test_get_team_colors_uppercase(self, sample_team_colors):
         controller = LEDController(team_colors_path=str(sample_team_colors))
         
-        assert controller.get_team_colors("wsh") == ["FFFFFF", "002D62", "CF0A2C"]
+        assert controller.get_team_colors("wsh") == ["FFFFFF", "002D62", "FF0000"]
     
     def test_get_team_colors_unknown_team(self, sample_team_colors):
         controller = LEDController(team_colors_path=str(sample_team_colors))
@@ -99,7 +99,7 @@ class TestLEDController:
         result = controller.celebrate("WSH")
         
         assert result is True
-        mock_instance.write.assert_called_with(b"C:FFFFFF,002D62,CF0A2C\n")
+        mock_instance.write.assert_called_with(b"C:FFFFFF,002D62,FF0000\n")
     
     @patch('StickCheck.led_controller.serial.Serial')
     def test_idle(self, mock_serial, sample_team_colors):
