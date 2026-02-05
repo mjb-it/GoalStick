@@ -94,6 +94,11 @@ class StatusLED:
             
             color, pattern = self.STATE_PATTERNS.get(state, ("off", "solid"))
             
+            # When OFF, don't send any commands - let other code control the LED strip
+            if state == DeviceState.OFF:
+                time.sleep(0.5)
+                continue
+            
             if pattern == "solid":
                 self._send_color(color)
                 time.sleep(0.5)
