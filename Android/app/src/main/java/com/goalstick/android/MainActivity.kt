@@ -99,9 +99,11 @@ class MainActivity : AppCompatActivity() {
         autoConnectOrPrompt()
     }
     
+    private var goalStickDevice: BluetoothDevice? = null
+    
     private fun autoConnectOrPrompt() {
         val pairedDevices = viewModel.bluetoothManager.getPairedDevices()
-        val goalStickDevice = pairedDevices.find { device ->
+        goalStickDevice = pairedDevices.find { device ->
             if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) 
                 == PackageManager.PERMISSION_GRANTED) {
                 device.name == "GoalStick"
@@ -114,12 +116,34 @@ class MainActivity : AppCompatActivity() {
             // Found GoalStick - auto-connect
             statusText.text = "Found GoalStick. Connecting..."
             lifecycleScope.launch {
-                viewModel.connect(goalStickDevice)
+                val connected = viewModel.connect(goalStickDevice!!)
+                if (!connected) {
+                    // Connection failed - GoalStick is paired but not accepting connections
+                    // This is normal when Pi is in normal operation mode (not pairing mode)
+                    showGoalStickNotReadyPrompt()
+                }
             }
         } else {
             // No GoalStick paired - prompt user to pair
             statusText.text = "GoalStick not paired. Please pair in Bluetooth settings."
             showBluetoothSettingsPrompt()
+        }
+    }
+    
+    private fun showGoalStickNotReadyPrompt() {
+        statusText.text = "GoalStick is paired but not in configuration mode.\n\nPress and hold the button on GoalStick for 3 seconds to enter pairing mode, then tap Retry."
+        scanButton.text = "Retry Connection"
+        scanButton.visibility = View.VISIBLE
+        scanButton.setOnClickListener {
+            goalStickDevice?.let { device ->
+                statusText.text = "Connecting..."
+                lifecycleScope.launch {
+                    val connected = viewModel.connect(device)
+                    if (!connected) {
+                        showGoalStickNotReadyPrompt()
+                    }
+                }
+            }
         }
     }
     

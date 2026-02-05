@@ -55,21 +55,48 @@ def _clear_bluetooth_pairings() -> bool:
         
         if result.returncode != 0:
             log.warning("Could not list paired devices")
-            return True  # No devices to remove
+        else:
+            # Parse device addresses and remove each one
+            for line in result.stdout.strip().split('\n'):
+                if line.startswith("Device "):
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        mac_address = parts[1]
+                        log.info(f"Removing paired device: {mac_address}")
+                        subprocess.run(
+                            ["bluetoothctl", "remove", mac_address],
+                            capture_output=True,
+                            text=True,
+                            timeout=10
+                        )
         
-        # Parse device addresses and remove each one
-        for line in result.stdout.strip().split('\n'):
-            if line.startswith("Device "):
-                parts = line.split()
-                if len(parts) >= 2:
-                    mac_address = parts[1]
-                    log.info(f"Removing paired device: {mac_address}")
-                    subprocess.run(
-                        ["bluetoothctl", "remove", mac_address],
-                        capture_output=True,
-                        text=True,
-                        timeout=10
-                    )
+        # Also clear the Bluetooth device cache directory directly
+        # This ensures pairings are truly removed even if bluetoothctl fails
+        bt_lib_path = Path("/var/lib/bluetooth")
+        if bt_lib_path.exists():
+            for adapter_dir in bt_lib_path.iterdir():
+                if adapter_dir.is_dir():
+                    for item in adapter_dir.iterdir():
+                        # Skip the adapter's own settings file
+                        if item.name == "settings":
+                            continue
+                        # Remove paired device directories (MAC address format)
+                        if item.is_dir() and ":" in item.name:
+                            log.info(f"Removing Bluetooth cache: {item}")
+                            subprocess.run(
+                                ["sudo", "rm", "-rf", str(item)],
+                                capture_output=True,
+                                text=True
+                            )
+        
+        # Restart Bluetooth service to apply changes
+        log.info("Restarting Bluetooth service...")
+        subprocess.run(
+            ["sudo", "systemctl", "restart", "bluetooth"],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
         
         log.info("Bluetooth pairings cleared")
         return True

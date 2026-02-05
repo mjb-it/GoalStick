@@ -20,10 +20,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
     
-    fun connect(device: BluetoothDevice) {
-        viewModelScope.launch {
-            bluetoothManager.connect(device)
-        }
+    suspend fun connect(device: BluetoothDevice): Boolean {
+        return bluetoothManager.connect(device)
     }
     
     fun sendConfiguration(wifiSsid: String, wifiPassword: String, teamAbbr: String) {
