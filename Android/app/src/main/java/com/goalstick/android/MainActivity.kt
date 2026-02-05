@@ -178,7 +178,9 @@ class MainActivity : AppCompatActivity() {
     
     private fun setupRecyclerView() {
         deviceAdapter = DeviceAdapter { device ->
-            viewModel.connect(device)
+            lifecycleScope.launch {
+                viewModel.connect(device)
+            }
         }
         devicesRecyclerView.layoutManager = LinearLayoutManager(this)
         devicesRecyclerView.adapter = deviceAdapter
