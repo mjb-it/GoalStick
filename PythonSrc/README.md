@@ -23,11 +23,19 @@ Python service for monitoring NHL games and triggering LED celebrations on a Ras
 
 | Pi Zero 2W Pin | Function | ESP32 Pin |
 |----------------|----------|-----------|
-| GPIO 14 (TXD)  | UART TX  | RX (GPIO 3) |
-| GPIO 15 (RXD)  | UART RX  | TX (GPIO 1) |
+| GPIO 14 (TXD)  | UART TX  | GPIO 16 (RX2) |
+| GPIO 15 (RXD)  | UART RX  | GPIO 17 (TX2) |
 | GPIO 27        | Reset    | EN |
 | GND            | Ground   | GND |
 | 5V             | Power    | VIN |
+
+### ESP32 → LED Strip
+
+| ESP32 Pin | Function | LED Strip |
+|-----------|----------|-----------|
+| GPIO 4    | Data     | DIN |
+| GND       | Ground   | GND |
+| VIN (5V)  | Power    | 5V (or external PSU for long strips) |
 
 ### Button (Pairing/Reset)
 
