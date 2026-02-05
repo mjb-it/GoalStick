@@ -98,6 +98,10 @@ cd GoalStick
 echo "Deploying GoalStick..."
 make deploy
 
+# Add safe.directory for git operations (service runs as root)
+echo "Configuring git safe.directory..."
+git config --global --add safe.directory /opt/goalstick
+
 # Stop the service before wiping WiFi (it needs network for updates)
 echo "Stopping GoalStick service temporarily..."
 systemctl stop goalstick.service || true
