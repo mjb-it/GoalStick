@@ -108,6 +108,14 @@ sudo apt-get update
 sudo apt-get install -y python3-gi python3-dbus bluetooth bluez
 ```
 
+Enable UART for ESP32 communication:
+
+```bash
+# Add to /boot/firmware/config.txt:
+echo "enable_uart=1" | sudo tee -a /boot/firmware/config.txt
+sudo reboot
+```
+
 Enable Bluetooth compatibility mode for SPP:
 
 ```bash

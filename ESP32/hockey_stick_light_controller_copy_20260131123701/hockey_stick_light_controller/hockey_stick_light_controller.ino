@@ -31,11 +31,22 @@ void setup() {
 }
 
 void loop() {
-  // Listen for commands from Raspberry Pi on Serial2
-  if (Serial2.available() > 0) {
-    String input = Serial2.readStringUntil('\n');
+  // Listen for commands from USB Serial OR Raspberry Pi Serial2
+  String input = "";
+  
+  if (Serial.available() > 0) {
+    input = Serial.readStringUntil('\n');
     input.trim();
-
+    Serial.print("USB received: ");
+    Serial.println(input);
+  } else if (Serial2.available() > 0) {
+    input = Serial2.readStringUntil('\n');
+    input.trim();
+    Serial.print("Serial2 received: ");
+    Serial.println(input);
+  }
+  
+  if (input.length() > 0) {
     if (input.startsWith("C:")) {
       Serial.println("Received celebration command");
       parseCelebration(input.substring(2));
@@ -46,6 +57,7 @@ void loop() {
       // Ping/health check - respond with "PONG"
       Serial.println("Received ping");
       Serial2.println("PONG");
+      Serial.println("PONG");
     }
   }
 

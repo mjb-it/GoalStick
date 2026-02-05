@@ -56,6 +56,12 @@ apt-get install -y \
     bluetooth \
     bluez
 
+# Enable UART for ESP32 communication
+echo "Enabling UART..."
+if ! grep -q "enable_uart=1" /boot/firmware/config.txt; then
+    echo "enable_uart=1" >> /boot/firmware/config.txt
+fi
+
 # Enable Bluetooth compatibility mode for SPP
 echo "Configuring Bluetooth..."
 if ! grep -q "ExecStart.*-C" /lib/systemd/system/bluetooth.service; then
