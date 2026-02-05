@@ -12,6 +12,7 @@ from StickCheck import (
     BluetoothConfig,
     BluetoothServer,
     BluetoothServerConfig,
+    BluetoothCommandServer,
     LEDController,
     LEDConfig,
     ConfigStore,
@@ -239,11 +240,17 @@ def main():
         log.warning("WiFi not configured - waiting for Bluetooth setup")
         status_led.set_state(DeviceState.NO_WIFI_CONFIG)
         # Don't start scheduler or network watchdog without WiFi
-        # Just wait for button press to enter pairing mode
+        # Just wait for button press to enter pairing mode, or WiFi to be configured
         button_handler = setup_button_handler(config)
         try:
             while True:
-                time.sleep(1)
+                time.sleep(5)
+                # Check if WiFi was configured (e.g., via Bluetooth pairing)
+                if is_wifi_configured():
+                    log.info("WiFi now configured - restarting service to apply")
+                    # Restart the service to pick up the new WiFi config
+                    subprocess.run(["sudo", "systemctl", "restart", "goalstick"], capture_output=True)
+                    return
         except KeyboardInterrupt:
             pass
         finally:
@@ -258,6 +265,14 @@ def main():
     # Set up button handler for pairing trigger
     button_handler = setup_button_handler(config)
     
+    # Start background Bluetooth command server for app communication
+    bt_command_server = BluetoothCommandServer(
+        led_controller=scheduler.led_controller,
+        config_store=scheduler.config_store
+    )
+    bt_command_server.start()
+    log.info("Background Bluetooth command server started")
+    
     # Start network watchdog (reboots if no connectivity for 5 minutes)
     network_watchdog = NetworkWatchdog()
     network_watchdog.start()
@@ -270,6 +285,8 @@ def main():
             button_handler.stop()
         if network_watchdog:
             network_watchdog.stop()
+        if bt_command_server:
+            bt_command_server.stop()
         if status_led:
             status_led.stop()
         scheduler.stop()

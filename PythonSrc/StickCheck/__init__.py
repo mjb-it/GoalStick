@@ -4,7 +4,7 @@ from .led_controller import LEDController, LEDConfig
 from .wifi_config import configure_wifi, is_wifi_configured
 from .config_store import ConfigStore, UserConfig
 from .bluetooth_pairing import BluetoothPairing, BluetoothConfig, PairingStatus
-from .bluetooth_server import BluetoothServer, BluetoothServerConfig, ReceivedConfig
+from .bluetooth_server import BluetoothServer, BluetoothServerConfig, ReceivedConfig, BluetoothCommandServer
 from .button_handler import ButtonHandler, ButtonConfig, ButtonState
 from .esp32_reset import ESP32Reset, ResetConfig
 from .factory_reset import factory_reset
@@ -28,6 +28,7 @@ __all__ = [
     "BluetoothServer",
     "BluetoothServerConfig",
     "ReceivedConfig",
+    "BluetoothCommandServer",
     "ButtonHandler",
     "ButtonConfig",
     "ButtonState",

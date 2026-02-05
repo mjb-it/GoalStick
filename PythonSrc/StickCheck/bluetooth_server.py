@@ -407,4 +407,212 @@ class BluetoothServer:
         self._cleanup()
     
     def is_running(self) -> bool:
+        """Check if the server is running."""
+        return self._running
+
+
+class BluetoothCommandServer:
+    """
+    Background Bluetooth server that accepts commands from the Android app.
+    Runs continuously during normal operation to handle test_goal, get_config, etc.
+    """
+    
+    def __init__(self, led_controller=None, config_store=None):
+        self.led_controller = led_controller
+        self.config_store = config_store
+        self._running = False
+        self._server_socket = None
+        self._thread = None
+    
+    def _run_command(self, cmd: list) -> tuple[bool, str]:
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            return result.returncode == 0, result.stdout + result.stderr
+        except subprocess.TimeoutExpired:
+            return False, "Command timed out"
+        except Exception as e:
+            return False, str(e)
+    
+    def _get_local_bluetooth_address(self) -> Optional[str]:
+        """Get the local Bluetooth adapter address."""
+        success, output = self._run_command(["hciconfig", "hci0"])
+        if success:
+            for line in output.split('\n'):
+                if 'BD Address:' in line:
+                    parts = line.split('BD Address:')
+                    if len(parts) > 1:
+                        addr = parts[1].strip().split()[0]
+                        return addr
+        return None
+    
+    def _get_current_config(self) -> dict:
+        """Get current configuration."""
+        if self.config_store:
+            config = self.config_store.load()
+            return {"team_abbr": config.team_abbr}
+        return {"team_abbr": "WSH"}
+    
+    def _trigger_test_goal(self) -> None:
+        """Trigger a test goal celebration."""
+        if self.led_controller:
+            log.info("Triggering test goal celebration!")
+            current_config = self._get_current_config()
+            team_abbr = current_config.get("team_abbr", "WSH")
+            self.led_controller.celebrate(team_abbr)
+    
+    def _handle_client(self, client_socket, client_info) -> None:
+        """Handle a connected client."""
+        log.info(f"Background BT server: client connected from {client_info}")
+        client_socket.settimeout(60)  # 1 minute timeout
+        
+        try:
+            data = b""
+            while self._running:
+                try:
+                    chunk = client_socket.recv(1024)
+                    if not chunk:
+                        break
+                    data += chunk
+                    
+                    # Try to parse JSON
+                    try:
+                        message_json = json.loads(data.decode('utf-8'))
+                        data = b""  # Reset buffer
+                        
+                        msg_type = message_json.get("type")
+                        log.debug(f"Background BT server received: {msg_type}")
+                        
+                        if msg_type == "get_config":
+                            current_config = self._get_current_config()
+                            response = json.dumps({
+                                "status": "ok",
+                                "config": current_config
+                            })
+                            client_socket.send(response.encode('utf-8'))
+                        
+                        elif msg_type == "test_goal":
+                            self._trigger_test_goal()
+                            response = json.dumps({"status": "ok"})
+                            client_socket.send(response.encode('utf-8'))
+                        
+                        elif msg_type == "config":
+                            # Handle config update
+                            team_abbr = message_json.get("team_abbr", "WSH")
+                            if self.config_store:
+                                self.config_store.set_team(team_abbr)
+                            response = json.dumps({"status": "ok"})
+                            client_socket.send(response.encode('utf-8'))
+                        
+                        else:
+                            response = json.dumps({"status": "error", "message": "unknown type"})
+                            client_socket.send(response.encode('utf-8'))
+                            
+                    except json.JSONDecodeError:
+                        continue  # Keep reading
+                        
+                except socket.timeout:
+                    break
+                    
+        except Exception as e:
+            log.error(f"Background BT server client error: {e}")
+        finally:
+            try:
+                client_socket.close()
+            except:
+                pass
+            log.info("Background BT server: client disconnected")
+    
+    def _register_sdp_service(self) -> None:
+        """Register SDP service for SPP."""
+        # Add SP profile so Android can find us via SPP UUID
+        self._run_command(["sudo", "sdptool", "add", "SP"])
+        log.info("Registered SPP service with SDP")
+    
+    def _server_loop(self) -> None:
+        """Main server loop - accepts connections and handles them."""
+        log.info("Background Bluetooth command server starting...")
+        
+        # Ensure Bluetooth is up and discoverable
+        self._run_command(["sudo", "hciconfig", "hci0", "up"])
+        self._run_command(["sudo", "hciconfig", "hci0", "piscan"])
+        
+        # Register SDP service so Android can find us
+        self._register_sdp_service()
+        
+        try:
+            self._server_socket = socket.socket(
+                socket.AF_BLUETOOTH,
+                socket.SOCK_STREAM,
+                socket.BTPROTO_RFCOMM
+            )
+            self._server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            self._server_socket.settimeout(5)  # Short timeout for accept to allow clean shutdown
+            
+            local_addr = self._get_local_bluetooth_address()
+            if not local_addr:
+                log.error("Background BT server: Could not find Bluetooth adapter")
+                return
+            
+            # Use channel 1 (standard SPP channel) for compatibility with Android
+            channel = 1
+            self._server_socket.bind((local_addr, channel))
+            self._server_socket.listen(1)
+            
+            log.info(f"Background Bluetooth command server listening on channel {channel}")
+            
+            while self._running:
+                try:
+                    client_socket, client_info = self._server_socket.accept()
+                    # Handle client in same thread (one at a time)
+                    self._handle_client(client_socket, client_info)
+                except socket.timeout:
+                    continue  # Just loop and check if still running
+                except Exception as e:
+                    if self._running:
+                        log.error(f"Background BT server accept error: {e}")
+                    break
+                    
+        except Exception as e:
+            log.error(f"Background BT server error: {e}")
+        finally:
+            if self._server_socket:
+                try:
+                    self._server_socket.close()
+                except:
+                    pass
+            log.info("Background Bluetooth command server stopped")
+    
+    def start(self) -> bool:
+        """Start the background Bluetooth command server."""
+        if self._running:
+            return True
+        
+        self._running = True
+        self._thread = threading.Thread(
+            target=self._server_loop,
+            daemon=True,
+            name="BluetoothCommandServer"
+        )
+        self._thread.start()
+        return True
+    
+    def stop(self) -> None:
+        """Stop the background Bluetooth command server."""
+        log.info("Stopping background Bluetooth command server...")
+        self._running = False
+        if self._server_socket:
+            try:
+                self._server_socket.close()
+            except:
+                pass
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=2.0)
+    
+    def is_running(self) -> bool:
+        """Check if the server is running."""
         return self._running
