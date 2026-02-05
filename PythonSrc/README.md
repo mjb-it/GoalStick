@@ -124,6 +124,18 @@ sudo systemctl daemon-reload
 sudo systemctl restart bluetooth
 ```
 
+Disable Bluetooth audio plugins (prevents Android from treating GoalStick as a headset):
+
+```bash
+sudo tee -a /etc/bluetooth/main.conf << 'EOF'
+
+# Disable audio plugins - GoalStick is not an audio device
+[General]
+DisablePlugins = a2dp,avrcp
+EOF
+sudo systemctl restart bluetooth
+```
+
 #### Quick Deploy (Production)
 
 Clone and deploy to `/opt/goalstick`:

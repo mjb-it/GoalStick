@@ -73,6 +73,18 @@ if ! grep -q "ExecStartPost.*sdptool" /lib/systemd/system/bluetooth.service; the
     sed -i '/ExecStart=/a ExecStartPost=/usr/bin/sdptool add SP' /lib/systemd/system/bluetooth.service
 fi
 
+# Disable audio plugins in BlueZ to prevent Android from treating device as headset
+echo "Disabling Bluetooth audio plugins..."
+mkdir -p /etc/bluetooth
+if [ ! -f /etc/bluetooth/main.conf ] || ! grep -q "DisablePlugins" /etc/bluetooth/main.conf; then
+    cat >> /etc/bluetooth/main.conf << 'EOF'
+
+# Disable audio plugins - GoalStick is not an audio device
+[General]
+DisablePlugins = a2dp,avrcp
+EOF
+fi
+
 systemctl daemon-reload
 
 # Clone GoalStick repository

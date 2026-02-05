@@ -63,9 +63,14 @@ class BluetoothServer:
         # Ensure Bluetooth adapter is up
         self._run_command(["sudo", "hciconfig", "hci0", "up"])
         
-        # Set device class to "Computer" (not headset)
-        # Class 0x1C0100 = Service: Networking, Object Transfer | Major: Computer | Minor: Uncategorized
-        self._run_command(["sudo", "hciconfig", "hci0", "class", "0x1C0100"])
+        # Set device class to "Computer - Uncategorized" with NO service classes
+        # This prevents Android from thinking it's an audio device
+        # Class 0x000100 = Major: Computer (0x01), Minor: Uncategorized (0x00), No services
+        self._run_command(["sudo", "hciconfig", "hci0", "class", "0x000100"])
+        
+        # Disable audio profiles (A2DP, HFP, HSP) by unloading PulseAudio Bluetooth modules
+        # and ensuring BlueZ doesn't advertise audio capabilities
+        self._run_command(["sudo", "killall", "pulseaudio"])  # Stop PulseAudio if running
         
         # Set device name using multiple methods for compatibility
         self._run_command(["bluetoothctl", "system-alias", self.config.device_name])
