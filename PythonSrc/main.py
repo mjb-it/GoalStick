@@ -24,7 +24,6 @@ from StickCheck import (
     NetworkWatchdog,
     NetworkWatchdogConfig,
     StatusLED,
-    StatusLEDConfig,
     DeviceState,
     is_wifi_configured
 )
@@ -229,13 +228,10 @@ def main():
     global network_watchdog, status_led
     scheduler = StickCheckScheduler(config)
     
-    # Set up status LED
-    led_config = StatusLEDConfig(
-        red_pin=config.status_led_red_pin,
-        green_pin=config.status_led_green_pin,
-        blue_pin=config.status_led_blue_pin
-    )
-    status_led = StatusLED(config=led_config)
+    # Set up status LED using the LED strip
+    # Get the LED controller from the scheduler
+    status_led = StatusLED()
+    status_led.set_led_controller(scheduler.led_controller)
     status_led.start()
     
     # Check if WiFi is configured - if not, show magenta and wait for pairing

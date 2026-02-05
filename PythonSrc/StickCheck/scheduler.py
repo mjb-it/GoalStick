@@ -46,10 +46,6 @@ class SchedulerConfig:
     # ESP32 reset settings
     esp32_reset_pin: int = 27  # BCM GPIO pin connected to ESP32 EN pin
     esp32_reset_retries: int = 2  # Number of reset attempts before giving up
-    # Status LED settings (RGB LED)
-    status_led_red_pin: int = 22    # BCM GPIO pin for red
-    status_led_green_pin: int = 23  # BCM GPIO pin for green
-    status_led_blue_pin: int = 24   # BCM GPIO pin for blue
 
 
 class HockeySeasonDetector:

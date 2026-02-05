@@ -10,7 +10,7 @@ from .esp32_reset import ESP32Reset, ResetConfig
 from .factory_reset import factory_reset
 from .auto_update import check_for_updates, update_code, update_and_restart, run_system_updates
 from .network_watchdog import NetworkWatchdog, NetworkWatchdogConfig
-from .status_led import StatusLED, StatusLEDConfig, DeviceState
+from .status_led import StatusLED, DeviceState
 
 __all__ = [
     "GameSchedule",
@@ -41,7 +41,6 @@ __all__ = [
     "NetworkWatchdog",
     "NetworkWatchdogConfig",
     "StatusLED",
-    "StatusLEDConfig",
     "DeviceState",
     "configure_wifi",
     "is_wifi_configured"

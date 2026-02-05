@@ -21,7 +21,7 @@ def temp_config_file(temp_dir):
 def sample_team_colors(temp_dir):
     """Create a sample team_colors.json file."""
     colors = {
-        "WSH": ["FFFFFF", "002D62", "E51937"],
+        "WSH": ["FFFFFF", "002D62", "CF0A2C"],
         "TOR": ["FFFFFF", "003876"],
         "BOS": ["FFFFFF", "FFC422", "231F20"]
     }

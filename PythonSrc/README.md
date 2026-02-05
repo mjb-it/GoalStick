@@ -47,18 +47,11 @@ Python service for monitoring NHL games and triggering LED celebrations on a Ras
 - **Hold 3 seconds**: Enter Bluetooth pairing mode
 - **Hold 10 seconds**: Factory reset (clears WiFi, Bluetooth, config)
 
-### Status LED (RGB, Common Cathode)
+### Status Indicator (via LED Strip)
 
-| Pi Zero 2W Pin | Function | LED Pin |
-|----------------|----------|---------|
-| GPIO 22        | Red      | R (via resistor) |
-| GPIO 23        | Green    | G (via resistor) |
-| GPIO 24        | Blue     | B (via resistor) |
-| GND            | Ground   | Common Cathode |
+The LED strip is used for status indication. No separate status LED needed.
 
-Use high-value resistors (1kΩ+) to keep the LED dim.
-
-**LED States** (LED is off during normal operation):
+**LED Strip States** (off during normal operation):
 
 | Color | Pattern | Meaning |
 |-------|---------|---------|

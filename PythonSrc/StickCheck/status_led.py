@@ -3,20 +3,13 @@ import threading
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional, Tuple
+from typing import Optional
 
 log = logging.getLogger(__name__)
 
-try:
-    import RPi.GPIO as GPIO
-    GPIO_AVAILABLE = True
-except ImportError:
-    GPIO_AVAILABLE = False
-    log.warning("RPi.GPIO not available - status LED disabled")
-
 
 class DeviceState(Enum):
-    """Device states with corresponding LED colors."""
+    """Device states with corresponding LED strip colors."""
     OFF = "off"                   # LED off - normal operation
     BOOTING = "booting"           # Yellow - starting up
     PAIRING = "pairing"           # Blue blink - Bluetooth pairing mode
@@ -26,35 +19,29 @@ class DeviceState(Enum):
     UPDATING = "updating"         # Cyan blink - updating
 
 
-@dataclass
+@dataclass 
 class StatusLEDConfig:
-    red_pin: int = 22      # BCM GPIO pin for red
-    green_pin: int = 23    # BCM GPIO pin for green
-    blue_pin: int = 24     # BCM GPIO pin for blue
-    common_anode: bool = False  # True if common anode RGB LED
+    """Configuration for status LED (kept for compatibility, not used)."""
+    pass
 
 
 class StatusLED:
     """
-    Controls an RGB status LED to indicate device state.
-    
-    Wiring (common cathode, active high):
-    - Red:   GPIO 22 -> resistor -> LED red pin
-    - Green: GPIO 23 -> resistor -> LED green pin
-    - Blue:  GPIO 24 -> resistor -> LED blue pin
-    - GND:   LED common cathode
+    Controls the LED strip to indicate device state.
+    Uses the existing LED controller to send colors to the ESP32/LED strip.
     """
     
-    # Color definitions (R, G, B) - 1 = on, 0 = off
+    # Color definitions as hex strings for LED strip
+    # Format: RRGGBB
     COLORS = {
-        "off":     (0, 0, 0),
-        "red":     (1, 0, 0),
-        "green":   (0, 1, 0),
-        "blue":    (0, 0, 1),
-        "yellow":  (1, 1, 0),
-        "cyan":    (0, 1, 1),
-        "magenta": (1, 0, 1),
-        "white":   (1, 1, 1),
+        "off":     "000000",
+        "red":     "FF0000",
+        "green":   "00FF00",
+        "blue":    "0000FF",
+        "yellow":  "FFFF00",
+        "cyan":    "00FFFF",
+        "magenta": "FF00FF",
+        "white":   "FFFFFF",
     }
     
     # State to pattern mapping - only special states have LED on
@@ -68,59 +55,32 @@ class StatusLED:
         DeviceState.UPDATING:         ("cyan", "slow_blink"),
     }
     
-    def __init__(self, config: StatusLEDConfig = None):
+    def __init__(self, config: StatusLEDConfig = None, led_controller=None):
         self.config = config or StatusLEDConfig()
+        self._led_controller = led_controller
         self._current_state: Optional[DeviceState] = None
         self._running = False
         self._blink_thread: Optional[threading.Thread] = None
         self._lock = threading.Lock()
     
-    def _setup_gpio(self) -> bool:
-        """Initialize GPIO pins."""
-        if not GPIO_AVAILABLE:
-            return False
-        
-        try:
-            GPIO.setmode(GPIO.BCM)
-            GPIO.setwarnings(False)
-            
-            GPIO.setup(self.config.red_pin, GPIO.OUT)
-            GPIO.setup(self.config.green_pin, GPIO.OUT)
-            GPIO.setup(self.config.blue_pin, GPIO.OUT)
-            
-            # Start with LED off
-            self._set_color("off")
-            
-            log.info(f"Status LED initialized on GPIO {self.config.red_pin}/{self.config.green_pin}/{self.config.blue_pin}")
-            return True
-            
-        except Exception as e:
-            log.error(f"Failed to setup status LED GPIO: {e}")
-            return False
+    def set_led_controller(self, led_controller) -> None:
+        """Set the LED controller for sending colors to the strip."""
+        self._led_controller = led_controller
     
-    def _cleanup_gpio(self) -> None:
-        """Clean up GPIO pins."""
-        if GPIO_AVAILABLE:
-            try:
-                self._set_color("off")
-                GPIO.cleanup([self.config.red_pin, self.config.green_pin, self.config.blue_pin])
-            except Exception:
-                pass
-    
-    def _set_color(self, color: str) -> None:
-        """Set the LED to a specific color."""
-        if not GPIO_AVAILABLE:
+    def _send_color(self, color: str) -> None:
+        """Send a color to the LED strip."""
+        if not self._led_controller:
             return
         
-        r, g, b = self.COLORS.get(color, (0, 0, 0))
+        hex_color = self.COLORS.get(color, "000000")
         
-        # Invert for common anode
-        if self.config.common_anode:
-            r, g, b = 1 - r, 1 - g, 1 - b
-        
-        GPIO.output(self.config.red_pin, r)
-        GPIO.output(self.config.green_pin, g)
-        GPIO.output(self.config.blue_pin, b)
+        if hex_color == "000000":
+            # Send idle command to turn off
+            self._led_controller.idle()
+        else:
+            # Send celebration command with single color
+            command = f"C:{hex_color}"
+            self._led_controller._send_command(command)
     
     def _blink_loop(self) -> None:
         """Background thread for blinking patterns."""
@@ -135,27 +95,23 @@ class StatusLED:
             color, pattern = self.STATE_PATTERNS.get(state, ("off", "solid"))
             
             if pattern == "solid":
-                self._set_color(color)
+                self._send_color(color)
                 time.sleep(0.5)
             elif pattern == "slow_blink":
-                self._set_color(color)
+                self._send_color(color)
                 time.sleep(1.0)
-                self._set_color("off")
+                self._send_color("off")
                 time.sleep(1.0)
             elif pattern == "fast_blink":
-                self._set_color(color)
+                self._send_color(color)
                 time.sleep(0.2)
-                self._set_color("off")
+                self._send_color("off")
                 time.sleep(0.2)
     
     def start(self) -> bool:
         """Start the status LED controller."""
         if self._running:
             return True
-        
-        if not self._setup_gpio():
-            log.warning("Status LED not available")
-            return False
         
         self._running = True
         self._blink_thread = threading.Thread(
@@ -164,6 +120,8 @@ class StatusLED:
             name="StatusLED"
         )
         self._blink_thread.start()
+        
+        log.info("Status LED started (using LED strip)")
         
         # Start in booting state
         self.set_state(DeviceState.BOOTING)
@@ -174,7 +132,8 @@ class StatusLED:
         self._running = False
         if self._blink_thread and self._blink_thread.is_alive():
             self._blink_thread.join(timeout=1.0)
-        self._cleanup_gpio()
+        # Turn off LED strip
+        self._send_color("off")
         log.info("Status LED stopped")
     
     def set_state(self, state: DeviceState) -> None:
