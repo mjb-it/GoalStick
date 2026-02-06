@@ -70,7 +70,7 @@ class LEDController:
             log.warning(f"No colors found for team: {team_abbr}")
         return colors
     
-    def _send_command(self, command: str) -> bool:
+    def _send_command(self, command: str, retry: bool = True) -> bool:
         if not self.is_connected():
             log.warning("Not connected to ESP32, attempting to connect...")
             if not self.connect():
@@ -85,8 +85,13 @@ class LEDController:
             self._serial.flush()
             log.debug(f"Sent command: {command.strip()}")
             return True
-        except serial.SerialException as e:
+        except (serial.SerialException, OSError) as e:
             log.error(f"Failed to send command: {e}")
+            # Disconnect and retry once on I/O error
+            self.disconnect()
+            if retry:
+                log.info("Reconnecting and retrying command...")
+                return self._send_command(command, retry=False)
             return False
     
     def celebrate(self, team_abbr: str) -> bool:
