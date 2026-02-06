@@ -1,0 +1,29 @@
+(kicad_sch
+  (version 20231120)
+  (generator "eeschema")
+  (generator_version "8.0")
+  (uuid "e6d1f5a0-1234-4567-89ab-cdef01234567")
+  (paper "A4")
+  (title_block
+    (title "GoalStick Carrier Board")
+    (date "2026-02-06")
+    (rev "1.0")
+    (company "GoalStick")
+    (comment 1 "Pi Zero 2W + ESP32 DevKit Carrier")
+  )
+
+  (lib_symbols
+  )
+
+  (text "GoalStick Carrier Board\n\nComponents:\n- Pi Zero 2W (2x20 header)\n- ESP32 DevKit V1 (2x15 header)\n- Tactile Button (6mm)\n- JST-XH 3-pin (LED strip)\n\nConnections:\n- Pi GPIO14 (TX) -> ESP32 GPIO16 (RX2)\n- Pi GPIO15 (RX) <- ESP32 GPIO17 (TX2)\n- Pi GPIO27 -> ESP32 EN (Reset)\n- Pi GPIO17 <- Button <- GND\n- ESP32 GPIO4 -> LED Strip DIN\n- 5V and GND shared"
+    (exclude_from_sim no)
+    (at 50.8 50.8 0)
+    (effects
+      (font
+        (size 2.54 2.54)
+      )
+      (justify left)
+    )
+    (uuid "a1b2c3d4-5678-90ab-cdef-123456789abc")
+  )
+)

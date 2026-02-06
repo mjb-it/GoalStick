@@ -68,18 +68,49 @@ Carrier board for Pi Zero 2W + ESP32 DevKit to mount on hockey stick.
     └────────────────────────────────────┘
 ```
 
-## EasyEDA Steps
+## KiCad Project
 
-1. **Create New Project**: File → New → Project
-2. **Create Schematic**: Add components from library
-   - Search "2x20 female header 2.54mm" for Pi socket
-   - Search "2x15 female header 2.54mm" for ESP32 socket  
-   - Search "tactile switch 6mm"
-   - Search "JST-XH 3P"
-3. **Wire connections** per schematic above
-4. **Convert to PCB**: Design → Convert to PCB
-5. **Arrange components** and route traces
-6. **Order**: Fabrication → JLCPCB
+Project files are in `Hardware/KiCad/GoalStick.kicad_pro`
+
+### Opening the Project
+1. Open KiCad (in Applications)
+2. File → Open Project → select `GoalStick.kicad_pro`
+
+### Adding Components to Schematic
+Open the schematic editor and add these symbols:
+
+| Symbol | Library | Notes |
+|--------|---------|-------|
+| Conn_02x20_Odd_Even | Connector_Generic | Pi Zero header |
+| Conn_01x15 (x2) | Connector_Generic | ESP32 headers |
+| SW_Push | Switch | Tactile button |
+| Conn_01x03 | Connector_Generic | LED strip JST |
+
+### Wiring in Schematic
+1. Place components
+2. Use 'W' key to wire
+3. Add power symbols: VCC, +5V, GND
+4. Add net labels for clarity (UART_TX, UART_RX, etc.)
+
+### Assigning Footprints
+1. Tools → Assign Footprints
+2. Suggested footprints:
+   - Pi header: `Connector_PinSocket_2.54mm:PinSocket_2x20_P2.54mm_Vertical`
+   - ESP32 headers: `Connector_PinSocket_2.54mm:PinSocket_1x15_P2.54mm_Vertical`
+   - Button: `Button_Switch_THT:SW_PUSH_6mm`
+   - JST: `Connector_JST:JST_XH_B3B-XH-A_1x03_P2.50mm_Vertical`
+
+### Creating PCB
+1. Tools → Update PCB from Schematic
+2. Arrange components
+3. Draw board outline on Edge.Cuts layer
+4. Route traces (or use autorouter)
+5. Run DRC (Inspect → Design Rules Checker)
+
+### Ordering from JLCPCB
+1. File → Fabrication Outputs → Gerbers
+2. Upload ZIP to jlcpcb.com
+3. Default settings work (~$5 for 5 boards)
 
 ## Power Considerations
 
