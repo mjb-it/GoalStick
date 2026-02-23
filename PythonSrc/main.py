@@ -3,6 +3,7 @@ import logging.handlers
 import signal
 import subprocess
 import sys
+import time
 import argparse
 from pathlib import Path
 from StickCheck import (
