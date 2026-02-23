@@ -200,8 +200,8 @@ deploy:
 		echo "Creating virtual environment..."; \
 		sudo python3 -m venv $(DEPLOY_DIR)/.venv --system-site-packages; \
 	fi
-	@# Install package
-	sudo $(DEPLOY_DIR)/.venv/bin/pip install -e "$(DEPLOY_DIR)/PythonSrc[dev]"
+	@# Install package with rpi extras (includes dbus-python, RPi.GPIO)
+	sudo $(DEPLOY_DIR)/.venv/bin/pip install -e "$(DEPLOY_DIR)/PythonSrc[rpi]"
 	@# Create config and log directories
 	sudo mkdir -p /etc/goalstick
 	sudo mkdir -p /var/log/goalstick
