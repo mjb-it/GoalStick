@@ -17,6 +17,7 @@ dependencies = [
 [project.optional-dependencies]
 rpi = [
     "RPi.GPIO",
+    "dbus-python",
 ]
 dev = [
     "pytest>=7.0",
