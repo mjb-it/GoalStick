@@ -14,16 +14,40 @@ make help
 
 ## Available Targets
 
+### Android Targets
+
 | Target | Description |
 |--------|-------------|
 | `make android-build` | Build Android debug APK |
 | `make android-release` | Build Android release APK |
 | `make android-install` | Install APK to connected device |
 | `make android-clean` | Clean Android build artifacts |
+
+### Python Targets
+
+| Target | Description |
+|--------|-------------|
+| `make python-venv` | Create virtual environment (if needed) |
 | `make python-test` | Run Python unit tests |
-| `make python-test-cov` | Run tests with coverage |
-| `make python-install` | Install Python package |
-| `make python-clean` | Clean Python artifacts |
+| `make python-test-cov` | Run tests with coverage report |
+| `make python-install` | Install Python package in dev mode |
+| `make python-clean` | Clean Python build artifacts |
+
+### Deployment Targets (run on Pi)
+
+| Target | Description |
+|--------|-------------|
+| `make deploy` | Deploy to /opt/goalstick and install service |
+| `make deploy-readonly` | Deploy + set up read-only filesystem (reboot required) |
+| `make service-install` | Install systemd service from current directory |
+| `make service-uninstall` | Remove systemd service |
+| `make service-status` | Check service status |
+| `make service-logs` | Tail the service logs |
+
+### Combined Targets
+
+| Target | Description |
+|--------|-------------|
 | `make all` | Build everything |
 | `make test` | Run all tests |
 | `make clean` | Clean all artifacts |
@@ -87,14 +111,31 @@ If WiFi isn't working, you can access the Pi directly over USB:
 
 ## Python Service Installation
 
-### On the Raspberry Pi
+### Quick Deploy (Recommended)
+
+On the Raspberry Pi, clone the repo and run the deploy target:
+
+```bash
+git clone https://github.com/yourusername/GoalStick.git
+cd GoalStick
+make deploy
+```
+
+This will:
+- Install to `/opt/goalstick`
+- Create a virtual environment
+- Install the systemd service
+- Start the service automatically
+
+### Manual Installation
 
 ```bash
 # Clone the repository
 git clone https://github.com/yourusername/GoalStick.git
 cd GoalStick
 
-# Install the Python service
+# Create virtual environment and install
+make python-venv
 make python-install
 
 # Or manually:
@@ -102,33 +143,39 @@ cd PythonSrc
 pip install -e .
 ```
 
-### Running as a Systemd Service
-
-Create `/etc/systemd/system/goalstick.service`:
-
-```ini
-[Unit]
-Description=GoalStick NHL Goal Celebration Service
-After=network.target
-
-[Service]
-Type=simple
-User=pi
-WorkingDirectory=/home/pi/GoalStick/PythonSrc
-ExecStart=/usr/bin/python3 main.py
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Enable and start:
+### Service Management
 
 ```bash
-sudo systemctl enable goalstick
-sudo systemctl start goalstick
+# Install service from current directory
+make service-install
+
+# Check status
+make service-status
+
+# View logs
+make service-logs
+
+# Remove service
+make service-uninstall
 ```
+
+### Read-Only Filesystem (Optional)
+
+For production deployments, enable read-only filesystem to prevent SD card corruption:
+
+```bash
+make deploy-readonly
+```
+
+This requires a reboot to take effect.
+
+### File Locations
+
+| Path | Description |
+|------|-------------|
+| `/opt/goalstick` | Installation directory |
+| `/etc/goalstick/config.json` | Configuration file |
+| `/var/log/goalstick/goalstick.log` | Log file |
 
 ---
 
