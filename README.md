@@ -238,29 +238,18 @@ Press and hold for 3 seconds to enter pairing mode.
 
 ---
 
-# Build System
+# Build & Deployment
 
-Use the Makefile for all build and test operations:
+For hands-free installation and automated deployment instructions, see **[DEPLOYMENT.md](DEPLOYMENT.md)**.
+
+Quick build commands:
 
 ```bash
-make help
+make help          # Show all available targets
+make all           # Build everything
+make test          # Run all tests
+make clean         # Clean all artifacts
 ```
-
-## Available Targets
-
-| Target | Description |
-|--------|-------------|
-| `make android-build` | Build Android debug APK |
-| `make android-release` | Build Android release APK |
-| `make android-install` | Install APK to connected device |
-| `make android-clean` | Clean Android build artifacts |
-| `make python-test` | Run Python unit tests |
-| `make python-test-cov` | Run tests with coverage |
-| `make python-install` | Install Python package |
-| `make python-clean` | Clean Python artifacts |
-| `make all` | Build everything |
-| `make test` | Run all tests |
-| `make clean` | Clean all artifacts |
 
 ---
 

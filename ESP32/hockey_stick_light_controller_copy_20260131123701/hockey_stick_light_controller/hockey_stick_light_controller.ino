@@ -1,12 +1,19 @@
 #include <Adafruit_NeoPixel.h>
-
+/* Use below for full-size ESP32
 #define LED_PIN    4
 #define LED_COUNT  300
 #define BRIGHTNESS 60
+*/
 
-// Serial2 pins for Raspberry Pi communication
-#define RXD2 16
-#define TXD2 17
+#define LED_PIN 10      // D10 on XIAO
+#define LED_COUNT 300
+#define BRIGHTNESS 60
+#define RX_PIN 20       // D7 on XIAO  
+#define TX_PIN 21       // D6 on XIAO
+
+
+// Serial1 pins for Raspberry Pi communication (XIAO ESP32C3)
+// D7 = GPIO20 = RX, D6 = GPIO21 = TX
 
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 
@@ -18,16 +25,23 @@ int activeColorCount = 0;
 int chaseOffset = 0;
 
 void setup() {
+  // Give USB time to initialize
+  delay(2000);
+  
   // USB Serial for debugging
   Serial.begin(115200);
+  while (!Serial) { delay(10); }
   
-  // Serial2 for Raspberry Pi communication on GPIO 16/17
-  Serial2.begin(115200, SERIAL_8N1, RXD2, TXD2);
+  Serial.println("Starting up...");
+  
+  // Serial1 for Raspberry Pi communication
+  // XIAO ESP32C3: D6=GPIO21=TX, D7=GPIO20=RX
+  Serial1.begin(115200, SERIAL_8N1, RX_PIN, TX_PIN);
   
   strip.begin();
   strip.setBrightness(BRIGHTNESS);
   strip.show();
-  Serial.println("Universal LED Controller Online. Waiting for Pi...");
+  Serial.println("Universal LED Controller Online.");
 }
 
 void loop() {
@@ -39,10 +53,10 @@ void loop() {
     input.trim();
     Serial.print("USB received: ");
     Serial.println(input);
-  } else if (Serial2.available() > 0) {
-    input = Serial2.readStringUntil('\n');
+  } else if (Serial1.available() > 0) {
+    input = Serial1.readStringUntil('\n');
     input.trim();
-    Serial.print("Serial2 received: ");
+    Serial.print("Serial1 received: ");
     Serial.println(input);
   }
   
@@ -56,7 +70,7 @@ void loop() {
     } else if (input == "P") {
       // Ping/health check - respond with "PONG"
       Serial.println("Received ping");
-      Serial2.println("PONG");
+      Serial1.println("PONG");
       Serial.println("PONG");
     }
   }
