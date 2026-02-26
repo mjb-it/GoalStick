@@ -73,6 +73,8 @@ button_handler = None
 network_watchdog = None
 status_led = None
 pairing_in_progress = False
+factory_reset_enabled = False
+service_start_time = None
 
 def signal_handler(sig, frame):
     print("\nShutting down gracefully...")
@@ -87,7 +89,10 @@ def signal_handler(sig, frame):
     sys.exit(0)
 
 def setup_button_handler(config: SchedulerConfig):
-    global pairing_in_progress
+    global pairing_in_progress, factory_reset_enabled, service_start_time
+    import time
+    
+    service_start_time = time.time()
     
     def on_button_hold():
         global pairing_in_progress
@@ -103,6 +108,22 @@ def setup_button_handler(config: SchedulerConfig):
             pairing_in_progress = False
     
     def on_factory_reset():
+        global factory_reset_enabled, service_start_time
+        
+        # Prevent factory reset within first 60 seconds of service start
+        # This prevents accidental resets from stuck buttons or floating GPIO pins during boot
+        elapsed_since_start = time.time() - service_start_time
+        if elapsed_since_start < 60:
+            log.warning(f"Factory reset blocked - service started only {elapsed_since_start:.1f}s ago (minimum 60s required)")
+            log.warning("This prevents accidental resets during boot. Wait and try again.")
+            return
+        
+        if not factory_reset_enabled:
+            log.warning("Factory reset triggered but not yet enabled - enabling now")
+            log.warning("Release button and hold again for 10s to confirm factory reset")
+            factory_reset_enabled = True
+            return
+        
         log.warning("Button held (10s) - initiating FACTORY RESET...")
         if factory_reset():
             log.info("Factory reset complete - rebooting...")
@@ -116,6 +137,23 @@ def setup_button_handler(config: SchedulerConfig):
         long_hold_time=config.factory_reset_hold_time
     )
     handler = ButtonHandler(config=btn_config)
+    
+    # Check initial button state before setting up callbacks
+    # This helps detect stuck buttons or floating GPIO pins
+    try:
+        import RPi.GPIO as GPIO
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(config.pairing_button_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+        initial_state = GPIO.input(config.pairing_button_pin)
+        if initial_state == GPIO.LOW:  # Button pressed at startup
+            log.warning(f"WARNING: Button on GPIO {config.pairing_button_pin} is PRESSED at startup!")
+            log.warning("This may indicate a stuck button or floating GPIO pin.")
+            log.warning("Factory reset is DISABLED for 60 seconds to prevent accidental reset.")
+        else:
+            log.info(f"Button on GPIO {config.pairing_button_pin} is in normal state (released)")
+    except Exception as e:
+        log.debug(f"Could not check initial button state: {e}")
+    
     handler.set_on_hold(on_button_hold)
     handler.set_on_long_hold(on_factory_reset)
     
@@ -123,6 +161,7 @@ def setup_button_handler(config: SchedulerConfig):
         log.info(f"Button handler started on GPIO {config.pairing_button_pin}")
         log.info(f"  - Hold {config.pairing_button_hold_time}s for pairing mode")
         log.info(f"  - Hold {config.factory_reset_hold_time}s for factory reset")
+        log.info(f"  - Factory reset requires 60s uptime + double confirmation")
         return handler
     else:
         log.warning("Button handler could not start - pairing via button disabled")
