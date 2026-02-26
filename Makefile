@@ -180,6 +180,10 @@ deploy:
 	@echo "Deploying GoalStick to $(DEPLOY_DIR)..."
 	@# Stop existing service if running
 	-sudo systemctl stop goalstick.service 2>/dev/null || true
+	@# Install system dependencies
+	@echo "Installing system dependencies..."
+	sudo apt-get update -qq
+	sudo apt-get install -y python3-dev python3-dbus python3-rpi.gpio libdbus-1-dev
 	@# Create deploy directory
 	sudo mkdir -p $(DEPLOY_DIR)
 	@# Copy Python source (excluding __pycache__, .pyc, etc.)
