@@ -2,8 +2,12 @@ from nhlpy import NHLClient
 from typing import Dict, Optional
 from datetime import datetime
 from dateutil.parser import parse
+from zoneinfo import ZoneInfo
 import logging
 log = logging.getLogger(__name__)
+
+# All game times displayed in Eastern Time
+EASTERN_TZ = ZoneInfo("America/New_York")
 
 
 class Game:
@@ -31,7 +35,8 @@ class GameSchedule:
             log.info(f"Found {len(games['games'])} games for today")
         for game in games["games"]:
             current_game = Game(game)
-            log.info(f"{current_game.away_team} vs {current_game.home_team} at {datetime.fromtimestamp(current_game.scheduled_timestamp).strftime('%I:%M %p')}")
+            game_time_et = datetime.fromtimestamp(current_game.scheduled_timestamp, tz=EASTERN_TZ)
+            log.info(f"{current_game.away_team} vs {current_game.home_team} at {game_time_et.strftime('%I:%M %p %Z')}")
             if self._my_team in (current_game.away_team, current_game.home_team):
                 log.info(f"Found game for {self._my_team}, stopping search.")
                 self.my_team_location = "homeTeam" if current_game.home_team == self._my_team else "awayTeam"

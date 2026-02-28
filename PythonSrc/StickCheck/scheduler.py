@@ -6,7 +6,7 @@ import threading
 from datetime import datetime, timedelta
 from typing import Optional, Callable
 from dataclasses import dataclass
-from .scorekeeper import GameSchedule, ScoreKeeper
+from .scorekeeper import GameSchedule, ScoreKeeper, EASTERN_TZ
 from .led_controller import LEDController, LEDConfig
 from .config_store import ConfigStore, UserConfig
 from .esp32_reset import ESP32Reset, ResetConfig
@@ -169,7 +169,7 @@ class StickCheckScheduler:
                 if self.game_schedule.my_game_today:
                     self.scorekeeper = ScoreKeeper(self.game_schedule.my_game_today)
                     game = self.game_schedule.my_game_today
-                    game_time = datetime.fromtimestamp(game.scheduled_timestamp).strftime('%I:%M %p')
+                    game_time = datetime.fromtimestamp(game.scheduled_timestamp, tz=EASTERN_TZ).strftime('%I:%M %p %Z')
                     log.info(f"Found game today: {game.away_team} vs {game.home_team} at {game_time}")
                     return True
                 else:
