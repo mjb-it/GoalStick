@@ -60,8 +60,19 @@ class BluetoothServer:
     
     def _setup_bluetooth(self) -> bool:
         """Configure Bluetooth for pairing."""
-        # Ensure Bluetooth adapter is up
-        self._run_command(["sudo", "hciconfig", "hci0", "up"])
+        # Ensure Bluetooth adapter is up (try multiple times)
+        for attempt in range(3):
+            success, output = self._run_command(["sudo", "hciconfig", "hci0", "up"])
+            if success:
+                # Verify it's actually up
+                _, status = self._run_command(["hciconfig", "hci0"])
+                if "UP RUNNING" in status:
+                    log.info("Bluetooth adapter is up and running")
+                    break
+            log.warning(f"Attempt {attempt + 1} to bring up hci0 failed, retrying...")
+            time.sleep(1)
+        else:
+            log.error("Failed to bring up Bluetooth adapter after 3 attempts")
         
         # Set device class to "Computer - Uncategorized" with NO service classes
         # This prevents Android from thinking it's an audio device

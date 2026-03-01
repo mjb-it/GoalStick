@@ -72,6 +72,7 @@ scheduler = None
 button_handler = None
 network_watchdog = None
 status_led = None
+bt_command_server = None
 pairing_in_progress = False
 factory_reset_enabled = False
 service_start_time = None
@@ -95,7 +96,7 @@ def setup_button_handler(config: SchedulerConfig):
     service_start_time = time.time()
     
     def on_button_hold():
-        global pairing_in_progress
+        global pairing_in_progress, bt_command_server
         if pairing_in_progress:
             log.info("Pairing already in progress, ignoring button hold")
             return
@@ -103,9 +104,19 @@ def setup_button_handler(config: SchedulerConfig):
         pairing_in_progress = True
         log.info("Button held (3s) - initiating Bluetooth pairing...")
         try:
+            # Stop background BT server to free up the channel
+            if bt_command_server and bt_command_server.is_running():
+                log.info("Stopping background Bluetooth server for pairing mode...")
+                bt_command_server.stop()
+                time.sleep(1)  # Give it time to release the socket
+            
             run_pairing_mode(config)
         finally:
             pairing_in_progress = False
+            # Restart background BT server after pairing
+            if bt_command_server:
+                log.info("Restarting background Bluetooth server...")
+                bt_command_server.start()
     
     def on_factory_reset():
         global factory_reset_enabled, service_start_time
@@ -306,6 +317,7 @@ def main():
     button_handler = setup_button_handler(config)
     
     # Start background Bluetooth command server for app communication
+    global bt_command_server
     bt_command_server = BluetoothCommandServer(
         led_controller=scheduler.led_controller,
         config_store=scheduler.config_store
