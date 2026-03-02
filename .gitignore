@@ -3,6 +3,9 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/main/VisualStudio.gitignore
 
+# macOS
+.DS_Store
+
 # User-specific files
 *.rsuser
 *.suo
@@ -418,3 +421,24 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+
+# KiCad temporary and local files
+fp-info-cache
+*.bak
+*.kicad_pcb-bak
+*.sch-bak
+*_autosave-*
+*.lck
+\#auto_saved_files\#
+*.kicad_prl
+ERC.json
+Hardware/KiCad/GoalStick-backups/
+Hardware/KiCad/Gerbers/
+# Connectivity and netlist (regenerated from schematic)
+*.net
+
+# Manufacturing outputs (unless you want to track versions of Gerbers)
+gerbers/
+*.gbr
+*.drl

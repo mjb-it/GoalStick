@@ -2161,16 +2161,16 @@
 		(uuid "0a5f7d62-07c9-4cdb-b433-0aa7cf2b3b0a")
 	)
 	(no_connect
-		(at 171.45 123.19)
-		(uuid "1390a180-669b-4033-9734-d5d677ae931a")
-	)
-	(no_connect
 		(at 20.32 149.86)
 		(uuid "1c933a6e-5aa0-4c0c-b4d0-a39dfdad833a")
 	)
 	(no_connect
 		(at 20.32 114.3)
 		(uuid "24c55db7-d540-4095-82b7-85f726d6bbe8")
+	)
+	(no_connect
+		(at 171.45 119.38)
+		(uuid "2a56f427-2942-41a3-9597-15a790d3b5f7")
 	)
 	(no_connect
 		(at 81.28 121.92)
@@ -2229,10 +2229,6 @@
 		(uuid "7b8ca267-bc75-4cd5-9c78-90017ebe0beb")
 	)
 	(no_connect
-		(at 171.45 119.38)
-		(uuid "7cb78f3b-8d13-4629-87a9-ae0ea15eabc6")
-	)
-	(no_connect
 		(at 20.32 116.84)
 		(uuid "7e0b484e-2caf-4127-99c1-0ab69fb59cbd")
 	)
@@ -2275,6 +2271,10 @@
 	(no_connect
 		(at 81.28 106.68)
 		(uuid "d2458e06-db18-493e-91ed-43136f80570c")
+	)
+	(no_connect
+		(at 151.13 119.38)
+		(uuid "db5d8b0d-f895-424b-aa56-acfe832ad524")
 	)
 	(no_connect
 		(at 171.45 107.95)
@@ -2551,7 +2551,7 @@
 		(uuid "7c09763f-f027-4930-a3b5-85fc7571f209")
 	)
 	(label "UART_RX"
-		(at 20.32 142.24 0)
+		(at 81.28 111.76 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -2601,7 +2601,7 @@
 		(uuid "c426efb3-3655-478f-adaa-1b88c3ec7dae")
 	)
 	(label "UART_TX"
-		(at 151.13 119.38 0)
+		(at 171.45 123.19 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -2611,7 +2611,7 @@
 		(uuid "c85d9a8c-47e2-4b9c-b53b-91ca218028c1")
 	)
 	(label "UART_TX"
-		(at 81.28 111.76 0)
+		(at 20.32 142.24 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -2651,12 +2651,12 @@
 		(uuid "f9b8f355-d138-4c74-9bb4-b3cfa5bdbc7b")
 	)
 	(label "+5V"
-		(at 171.45 100.33 0)
+		(at 171.45 100.33 180)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
-			(justify left bottom)
+			(justify right bottom)
 		)
 		(uuid "fefc1eaf-29f7-4555-903b-b1db95cf6227")
 	)
