@@ -244,6 +244,12 @@ class StickCheckScheduler:
                     game = self.scorekeeper.my_game
                     log.info(f"GOAL! {game.away_team} vs {game.home_team} - Goal #{goals_detected}")
                     
+                    # Apply celebration delay (for broadcast sync)
+                    delay = self.config_store.get_celebration_delay()
+                    if delay > 0:
+                        log.info(f"Waiting {delay}s for broadcast delay...")
+                        time.sleep(delay)
+                    
                     # Trigger LED celebration
                     self.led_controller.celebrate(self.config.team_abbr)
                 

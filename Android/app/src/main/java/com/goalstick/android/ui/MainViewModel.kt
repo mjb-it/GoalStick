@@ -24,9 +24,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return bluetoothManager.connect(device)
     }
     
-    fun sendConfiguration(wifiSsid: String, wifiPassword: String, teamAbbr: String) {
+    fun sendConfiguration(wifiSsid: String, wifiPassword: String, teamAbbr: String, celebrationDelaySeconds: Int = 0) {
         viewModelScope.launch {
-            val success = bluetoothManager.sendConfiguration(wifiSsid, wifiPassword, teamAbbr)
+            val success = bluetoothManager.sendConfiguration(wifiSsid, wifiPassword, teamAbbr, celebrationDelaySeconds)
             if (success) {
                 _configSent.value = true
             } else {

@@ -136,7 +136,8 @@ class BluetoothServer:
         config_store = ConfigStore()
         user_config = config_store.load()
         return {
-            "team_abbr": user_config.team_abbr
+            "team_abbr": user_config.team_abbr,
+            "celebration_delay_seconds": user_config.celebration_delay_seconds
         }
     
     def _get_local_bluetooth_address(self) -> Optional[str]:
@@ -360,8 +361,9 @@ class BluetoothServer:
             wifi_ssid = config_json.get("wifi_ssid", "")
             wifi_password = config_json.get("wifi_password", "")
             team_abbr = config_json.get("team_abbr", "WSH")
+            celebration_delay = config_json.get("celebration_delay_seconds", 0)
             
-            log.info(f"Received config - SSID: {wifi_ssid}, Team: {team_abbr}")
+            log.info(f"Received config - SSID: {wifi_ssid}, Team: {team_abbr}, Delay: {celebration_delay}s")
             
             # Configure WiFi if credentials provided
             if wifi_ssid and wifi_password:
@@ -371,10 +373,11 @@ class BluetoothServer:
                 else:
                     log.warning(f"Failed to configure WiFi for network: {wifi_ssid}")
             
-            # Save team configuration
+            # Save team and delay configuration
             from .config_store import ConfigStore
             config_store = ConfigStore()
             config_store.set_team(team_abbr)
+            config_store.set_celebration_delay(celebration_delay)
             
             return ReceivedConfig(
                 wifi_ssid=wifi_ssid,
@@ -465,8 +468,11 @@ class BluetoothCommandServer:
         """Get current configuration."""
         if self.config_store:
             config = self.config_store.load()
-            return {"team_abbr": config.team_abbr}
-        return {"team_abbr": "WSH"}
+            return {
+                "team_abbr": config.team_abbr,
+                "celebration_delay_seconds": config.celebration_delay_seconds
+            }
+        return {"team_abbr": "WSH", "celebration_delay_seconds": 0}
     
     def _trigger_test_goal(self) -> None:
         """Trigger a test goal celebration."""
@@ -514,8 +520,10 @@ class BluetoothCommandServer:
                         elif msg_type == "config":
                             # Handle config update
                             team_abbr = message_json.get("team_abbr", "WSH")
+                            celebration_delay = message_json.get("celebration_delay_seconds", 0)
                             if self.config_store:
                                 self.config_store.set_team(team_abbr)
+                                self.config_store.set_celebration_delay(celebration_delay)
                             response = json.dumps({"status": "ok"})
                             client_socket.send(response.encode('utf-8'))
                         

@@ -12,6 +12,7 @@ DEFAULT_CONFIG_PATH = Path("/etc/goalstick/config.json")
 @dataclass
 class UserConfig:
     team_abbr: str = "WSH"
+    celebration_delay_seconds: int = 0  # Delay before triggering lights (0-180)
     
     def to_dict(self) -> dict:
         return asdict(self)
@@ -19,7 +20,8 @@ class UserConfig:
     @classmethod
     def from_dict(cls, data: dict) -> "UserConfig":
         return cls(
-            team_abbr=data.get("team_abbr", "WSH")
+            team_abbr=data.get("team_abbr", "WSH"),
+            celebration_delay_seconds=min(180, max(0, data.get("celebration_delay_seconds", 0)))
         )
 
 
@@ -64,3 +66,11 @@ class ConfigStore:
     
     def get_team(self) -> str:
         return self.load().team_abbr
+    
+    def set_celebration_delay(self, delay_seconds: int) -> bool:
+        config = self.load()
+        config.celebration_delay_seconds = min(180, max(0, delay_seconds))
+        return self.save(config)
+    
+    def get_celebration_delay(self) -> int:
+        return self.load().celebration_delay_seconds

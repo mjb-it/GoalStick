@@ -14,6 +14,7 @@ import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.ProgressBar
+import android.widget.SeekBar
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
@@ -49,6 +50,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var wifiSsidInput: TextInputEditText
     private lateinit var wifiPasswordInput: TextInputEditText
     private lateinit var teamSpinner: Spinner
+    private lateinit var delaySeekBar: SeekBar
+    private lateinit var delayValueText: TextView
     private lateinit var sendConfigButton: Button
     private lateinit var testGoalButton: Button
     private lateinit var configProgressBar: ProgressBar
@@ -167,6 +170,8 @@ class MainActivity : AppCompatActivity() {
         wifiSsidInput = findViewById(R.id.wifiSsidInput)
         wifiPasswordInput = findViewById(R.id.wifiPasswordInput)
         teamSpinner = findViewById(R.id.teamSpinner)
+        delaySeekBar = findViewById(R.id.delaySeekBar)
+        delayValueText = findViewById(R.id.delayValueText)
         sendConfigButton = findViewById(R.id.sendConfigButton)
         testGoalButton = findViewById(R.id.testGoalButton)
         configProgressBar = findViewById(R.id.configProgressBar)
@@ -174,6 +179,14 @@ class MainActivity : AppCompatActivity() {
         scanButton.setOnClickListener { checkPermissionsAndScan() }
         sendConfigButton.setOnClickListener { sendConfiguration() }
         testGoalButton.setOnClickListener { sendTestGoal() }
+        
+        delaySeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                delayValueText.text = "${progress}s"
+            }
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
     }
     
     private fun setupRecyclerView() {
@@ -270,6 +283,10 @@ class MainActivity : AppCompatActivity() {
                         teamSpinner.setSelection(teamIndex)
                     }
                 }
+                config?.let {
+                    delaySeekBar.progress = it.celebrationDelaySeconds
+                    delayValueText.text = "${it.celebrationDelaySeconds}s"
+                }
             }
         }
     }
@@ -320,6 +337,7 @@ class MainActivity : AppCompatActivity() {
         val password = wifiPasswordInput.text?.toString() ?: ""
         val selectedPosition = teamSpinner.selectedItemPosition
         val teamAbbr = TeamData.teams[selectedPosition].first
+        val delaySeconds = delaySeekBar.progress
         
         if (ssid.isBlank()) {
             wifiSsidInput.error = "WiFi SSID required"
@@ -328,7 +346,7 @@ class MainActivity : AppCompatActivity() {
         
         configProgressBar.visibility = View.VISIBLE
         sendConfigButton.isEnabled = false
-        viewModel.sendConfiguration(ssid, password, teamAbbr)
+        viewModel.sendConfiguration(ssid, password, teamAbbr, delaySeconds)
     }
     
     private fun sendTestGoal() {

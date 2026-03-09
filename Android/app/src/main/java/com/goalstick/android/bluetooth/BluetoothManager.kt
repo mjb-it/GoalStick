@@ -128,7 +128,7 @@ class BluetoothManager(private val context: Context) {
         }
     }
     
-    suspend fun sendConfiguration(wifiSsid: String, wifiPassword: String, teamAbbr: String): Boolean 
+    suspend fun sendConfiguration(wifiSsid: String, wifiPassword: String, teamAbbr: String, celebrationDelaySeconds: Int = 0): Boolean 
         = withContext(Dispatchers.IO) {
         try {
             val json = JSONObject().apply {
@@ -136,6 +136,7 @@ class BluetoothManager(private val context: Context) {
                 put("wifi_ssid", wifiSsid)
                 put("wifi_password", wifiPassword)
                 put("team_abbr", teamAbbr)
+                put("celebration_delay_seconds", celebrationDelaySeconds)
             }
             
             outputStream?.write(json.toString().toByteArray())
@@ -185,7 +186,8 @@ class BluetoothManager(private val context: Context) {
     }
     
     data class GoalStickConfig(
-        val teamAbbr: String?
+        val teamAbbr: String?,
+        val celebrationDelaySeconds: Int = 0
     )
     
     suspend fun getConfig(): GoalStickConfig? = withContext(Dispatchers.IO) {
@@ -207,7 +209,8 @@ class BluetoothManager(private val context: Context) {
                 if (responseJson.getString("status") == "ok") {
                     val configJson = responseJson.optJSONObject("config")
                     GoalStickConfig(
-                        teamAbbr = configJson?.optString("team_abbr")
+                        teamAbbr = configJson?.optString("team_abbr"),
+                        celebrationDelaySeconds = configJson?.optInt("celebration_delay_seconds", 0) ?: 0
                     )
                 } else {
                     null

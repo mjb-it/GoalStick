@@ -3,7 +3,8 @@ package com.goalstick.android.data
 data class ConfigurationData(
     val wifiSsid: String,
     val wifiPassword: String,
-    val teamAbbr: String
+    val teamAbbr: String,
+    val celebrationDelaySeconds: Int = 0
 )
 
 object TeamData {
