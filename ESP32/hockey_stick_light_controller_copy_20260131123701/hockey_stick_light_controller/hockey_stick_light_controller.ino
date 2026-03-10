@@ -28,9 +28,9 @@ void setup() {
   // Give USB time to initialize
   delay(2000);
   
-  // USB Serial for debugging
+  // USB Serial for debugging (don't wait for it - blocks without USB connected)
   Serial.begin(115200);
-  while (!Serial) { delay(10); }
+  // Note: Removed "while (!Serial)" - it blocks forever if USB isn't connected
   
   Serial.println("Starting up...");
   
