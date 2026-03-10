@@ -201,8 +201,8 @@ class MainActivity : AppCompatActivity() {
     
     private fun setupTeamSpinner() {
         val teamNames = TeamData.teams.map { "${it.first} - ${it.second}" }
-        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, teamNames)
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        val adapter = ArrayAdapter(this, R.layout.spinner_item, teamNames)
+        adapter.setDropDownViewResource(R.layout.spinner_dropdown_item)
         teamSpinner.adapter = adapter
     }
     

@@ -5,4 +5,15 @@
         <item name="colorOnPrimary">@color/white</item>
         <item name="colorSecondary">@color/teal_200</item>
     </style>
+
+    <!-- Spinner style that works in both light and dark mode -->
+    <style name="SpinnerStyle" parent="Widget.AppCompat.Spinner">
+        <item name="android:background">@drawable/spinner_background</item>
+        <item name="android:popupBackground">?attr/colorSurface</item>
+    </style>
+
+    <style name="SpinnerItemStyle" parent="Widget.AppCompat.TextView.SpinnerItem">
+        <item name="android:textColor">?attr/colorOnSurface</item>
+        <item name="android:padding">12dp</item>
+    </style>
 </resources>
