@@ -183,7 +183,17 @@ deploy:
 	@# Install system dependencies
 	@echo "Installing system dependencies..."
 	sudo apt-get update -qq
-	sudo apt-get install -y python3-dev python3-dbus python3-rpi.gpio libdbus-1-dev
+	sudo apt-get install -y python3-dev python3-dbus python3-rpi.gpio libdbus-1-dev bluez
+	@# Enable BlueZ compatibility mode for SDP (required for RFCOMM on modern BlueZ)
+	@echo "Configuring Bluetooth for RFCOMM/SDP support..."
+	@if ! grep -q '\-\-compat' /lib/systemd/system/bluetooth.service; then \
+		sudo sed -i 's|ExecStart=/usr/libexec/bluetooth/bluetoothd|ExecStart=/usr/libexec/bluetooth/bluetoothd --compat|' /lib/systemd/system/bluetooth.service; \
+		sudo systemctl daemon-reload; \
+		sudo systemctl restart bluetooth; \
+		echo "BlueZ --compat mode enabled"; \
+	else \
+		echo "BlueZ --compat mode already enabled"; \
+	fi
 	@# Create deploy directory
 	sudo mkdir -p $(DEPLOY_DIR)
 	@# Copy Python source (excluding __pycache__, .pyc, etc.)
