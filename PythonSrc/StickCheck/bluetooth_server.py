@@ -60,15 +60,22 @@ class BluetoothServer:
     
     def _setup_bluetooth(self) -> bool:
         """Configure Bluetooth for pairing."""
+        # Unblock Bluetooth via rfkill (required on Pi Zero W 2)
+        self._run_command(["sudo", "rfkill", "unblock", "bluetooth"])
+        time.sleep(0.5)
+        
         # Ensure Bluetooth adapter is up (try multiple times)
         for attempt in range(3):
-            success, output = self._run_command(["sudo", "hciconfig", "hci0", "up"])
-            if success:
-                # Verify it's actually up
-                _, status = self._run_command(["hciconfig", "hci0"])
-                if "UP RUNNING" in status:
-                    log.info("Bluetooth adapter is up and running")
-                    break
+            # Try multiple methods to bring up the adapter
+            self._run_command(["sudo", "hciconfig", "hci0", "up"])
+            self._run_command(["sudo", "bluetoothctl", "power", "on"])
+            time.sleep(0.5)
+            
+            # Verify it's actually up
+            _, status = self._run_command(["hciconfig", "hci0"])
+            if "UP RUNNING" in status:
+                log.info("Bluetooth adapter is up and running")
+                break
             log.warning(f"Attempt {attempt + 1} to bring up hci0 failed, retrying...")
             time.sleep(1)
         else:
