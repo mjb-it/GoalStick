@@ -118,7 +118,7 @@ class LEDController:
                 return False
         
         try:
-            # Clear any pending data in buffer
+            # Clear any pending data in buffer (ESP32 boot messages)
             self._serial.reset_input_buffer()
             
             # Send ping command
@@ -130,8 +130,14 @@ class LEDController:
             self._serial.timeout = timeout
             
             try:
-                response = self._serial.readline().decode('utf-8').strip()
-                if response == "PONG":
+                # Read response, handling potential garbage bytes from ESP32 boot
+                raw_response = self._serial.readline()
+                try:
+                    response = raw_response.decode('utf-8', errors='ignore').strip()
+                except:
+                    response = ""
+                
+                if "PONG" in response:
                     log.info("ESP32 health check passed")
                     return True
                 else:
