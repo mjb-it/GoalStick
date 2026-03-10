@@ -563,8 +563,16 @@ class BluetoothCommandServer:
         """Main server loop - accepts connections and handles them."""
         log.info("Background Bluetooth command server starting...")
         
-        # Ensure Bluetooth is up and discoverable
+        # Unblock Bluetooth via rfkill (required on Pi Zero W 2)
+        self._run_command(["sudo", "rfkill", "unblock", "bluetooth"])
+        time.sleep(0.5)
+        
+        # Ensure Bluetooth is up and connectable
         self._run_command(["sudo", "hciconfig", "hci0", "up"])
+        self._run_command(["sudo", "bluetoothctl", "power", "on"])
+        time.sleep(0.5)
+        
+        # Make connectable (piscan) so paired devices can connect
         self._run_command(["sudo", "hciconfig", "hci0", "piscan"])
         
         # Register SDP service so Android can find us
