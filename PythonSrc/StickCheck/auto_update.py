@@ -1,6 +1,7 @@
 import logging
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 log = logging.getLogger(__name__)
@@ -180,6 +181,95 @@ def update_and_restart() -> None:
         )
         # If we get here, the restart failed
         log.error("Service restart may have failed")
+
+
+def check_esp32_changes() -> bool:
+    """
+    Check if ESP32 code has changed in the latest update.
+    Returns True if ESP32 code was modified.
+    """
+    install_dir = get_install_dir()
+    
+    try:
+        # Check what files changed in the last pull
+        result = subprocess.run(
+            ["git", "diff", "--name-only", "HEAD@{1}", "HEAD"],
+            cwd=install_dir,
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        
+        if result.returncode != 0:
+            log.warning("Could not check ESP32 changes")
+            return False
+        
+        # Check if any .ino files changed
+        changed_files = result.stdout.strip().split('\n')
+        return any('.ino' in f for f in changed_files)
+        
+    except Exception as e:
+        log.error(f"Error checking ESP32 changes: {e}")
+        return False
+
+
+def update_esp32_firmware() -> bool:
+    """
+    Compile and upload ESP32 firmware using arduino-cli.
+    Returns True if successful.
+    """
+    install_dir = get_install_dir()
+    sketch_path = install_dir / "ESP32" / "hockey_stick_light_controller_copy_20260131123701" / "hockey_stick_light_controller"
+    
+    if not sketch_path.exists():
+        log.error(f"ESP32 sketch not found at {sketch_path}")
+        return False
+    
+    try:
+        log.info("Compiling ESP32 firmware...")
+        
+        # Compile the sketch
+        result = subprocess.run(
+            ["arduino-cli", "compile", "--fqbn", "esp32:esp32:XIAO_ESP32C3", str(sketch_path)],
+            capture_output=True,
+            text=True,
+            timeout=300
+        )
+        
+        if result.returncode != 0:
+            log.error(f"ESP32 compile failed: {result.stderr}")
+            return False
+        
+        log.info("ESP32 compile successful")
+        
+        # Upload to ESP32
+        log.info("Uploading ESP32 firmware...")
+        
+        result = subprocess.run(
+            ["arduino-cli", "upload", "--fqbn", "esp32:esp32:XIAO_ESP32C3", 
+             "--port", "/dev/serial0", str(sketch_path)],
+            capture_output=True,
+            text=True,
+            timeout=120
+        )
+        
+        if result.returncode != 0:
+            log.error(f"ESP32 upload failed: {result.stderr}")
+            return False
+        
+        log.info("ESP32 firmware updated successfully")
+        
+        # Wait for ESP32 to reboot
+        time.sleep(3)
+        
+        return True
+        
+    except subprocess.TimeoutExpired:
+        log.error("ESP32 update timed out")
+        return False
+    except Exception as e:
+        log.error(f"Error updating ESP32: {e}")
+        return False
 
 
 def run_system_updates() -> bool:

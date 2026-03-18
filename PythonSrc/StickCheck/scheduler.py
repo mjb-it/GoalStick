@@ -10,7 +10,7 @@ from .scorekeeper import GameSchedule, ScoreKeeper, EASTERN_TZ
 from .led_controller import LEDController, LEDConfig
 from .config_store import ConfigStore, UserConfig
 from .esp32_reset import ESP32Reset, ResetConfig
-from .auto_update import check_for_updates, update_code, run_system_updates, is_overlay_active, disable_overlay_for_update, enable_overlay_after_update
+from .auto_update import check_for_updates, update_code, run_system_updates, is_overlay_active, disable_overlay_for_update, enable_overlay_after_update, check_esp32_changes, update_esp32_firmware
 
 log = logging.getLogger(__name__)
 
@@ -314,6 +314,14 @@ class StickCheckScheduler:
                     # No overlay, can update directly
                     if update_code():
                         log.info("Code updated - will take effect on next restart")
+                        
+                        # Check if ESP32 firmware needs updating
+                        if check_esp32_changes():
+                            log.info("ESP32 code changed - updating firmware...")
+                            if update_esp32_firmware():
+                                log.info("ESP32 firmware updated successfully")
+                            else:
+                                log.warning("ESP32 firmware update failed")
             
             # Run system security updates (weekly, on Sundays)
             if datetime.now().weekday() == 6:  # Sunday

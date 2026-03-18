@@ -183,7 +183,20 @@ deploy:
 	@# Install system dependencies
 	@echo "Installing system dependencies..."
 	sudo apt-get update -qq
-	sudo apt-get install -y python3-dev python3-dbus python3-rpi.gpio libdbus-1-dev bluez
+	sudo apt-get install -y python3-dev python3-dbus python3-rpi.gpio libdbus-1-dev bluez curl
+	@# Install arduino-cli for ESP32 OTA updates
+	@echo "Installing arduino-cli..."
+	@if [ ! -f "/usr/local/bin/arduino-cli" ]; then \
+		curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sudo BINDIR=/usr/local/bin sh; \
+		sudo arduino-cli config init; \
+		sudo arduino-cli config add board_manager.additional_urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json; \
+		sudo arduino-cli core update-index; \
+		sudo arduino-cli core install esp32:esp32; \
+		sudo arduino-cli lib install "Adafruit NeoPixel"; \
+		echo "arduino-cli installed and configured for ESP32"; \
+	else \
+		echo "arduino-cli already installed"; \
+	fi
 	@# Enable BlueZ compatibility mode for SDP (required for RFCOMM on modern BlueZ)
 	@echo "Configuring Bluetooth for RFCOMM/SDP support..."
 	@if ! grep -q '\-\-compat' /lib/systemd/system/bluetooth.service; then \
@@ -205,6 +218,8 @@ deploy:
 		$(PYTHON_DIR)/ $(DEPLOY_DIR)/PythonSrc/
 	@# Copy team colors data
 	@if [ -d "data" ]; then sudo rsync -av data/ $(DEPLOY_DIR)/data/; fi
+	@# Copy ESP32 source for OTA updates
+	sudo rsync -av ESP32/ $(DEPLOY_DIR)/ESP32/
 	@# Copy .git for auto-updates
 	sudo rsync -av .git/ $(DEPLOY_DIR)/.git/
 	@# Mark directory as safe for git (needed for auto-updates when running as root)
