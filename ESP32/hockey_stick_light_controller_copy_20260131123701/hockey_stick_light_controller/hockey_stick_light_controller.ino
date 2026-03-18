@@ -104,9 +104,14 @@ void parseCelebration(String data) {
 void triggerGoal() {
   isCelebrating = true;
   celebrationStartTime = millis();
-  // Blink first 10 LEDs 3 times
+  // Blink all LEDs 3 times, divided by team colors
+  int ledsPerColor = strip.numPixels() / activeColorCount;
   for (int b = 0; b < 3; b++) {
-    for(int i=0; i<10; i++) strip.setPixelColor(i, activeColors[0]);
+    for(int i=0; i<strip.numPixels(); i++) {
+      int colorIndex = i / ledsPerColor;
+      if (colorIndex >= activeColorCount) colorIndex = activeColorCount - 1;
+      strip.setPixelColor(i, activeColors[colorIndex]);
+    }
     strip.show(); delay(300);
     strip.clear(); strip.show(); delay(300);
   }
