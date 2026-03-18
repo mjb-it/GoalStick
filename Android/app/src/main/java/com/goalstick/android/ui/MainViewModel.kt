@@ -5,6 +5,7 @@ import android.bluetooth.BluetoothDevice
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.goalstick.android.bluetooth.BluetoothManager
+import com.goalstick.android.data.GoalStickConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -50,8 +51,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     
-    private val _currentConfig = MutableStateFlow<BluetoothManager.GoalStickConfig?>(null)
-    val currentConfig: StateFlow<BluetoothManager.GoalStickConfig?> = _currentConfig.asStateFlow()
+    private val _currentConfig = MutableStateFlow<GoalStickConfig?>(null)
+    val currentConfig: StateFlow<GoalStickConfig?> = _currentConfig.asStateFlow()
     
     fun fetchConfig() {
         viewModelScope.launch {

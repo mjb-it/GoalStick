@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.util.Log
 import androidx.core.app.ActivityCompat
+import com.goalstick.android.data.GoalStickConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -184,11 +185,6 @@ class BluetoothManager(private val context: Context) {
             false
         }
     }
-    
-    data class GoalStickConfig(
-        val teamAbbr: String?,
-        val celebrationDelaySeconds: Int = 0
-    )
     
     suspend fun getConfig(): GoalStickConfig? = withContext(Dispatchers.IO) {
         try {
