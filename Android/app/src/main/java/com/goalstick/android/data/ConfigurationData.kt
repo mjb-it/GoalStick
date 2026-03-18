@@ -7,6 +7,12 @@ data class ConfigurationData(
     val celebrationDelaySeconds: Int = 0
 )
 
+data class GoalStickConfig(
+    val teamAbbr: String?,
+    val celebrationDelaySeconds: Int,
+    val ipAddress: String? = null
+)
+
 object TeamData {
     val teams = listOf(
         "ANA" to "Anaheim Ducks",

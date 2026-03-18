@@ -41,6 +41,7 @@ class MainActivity : AppCompatActivity() {
     
     // Discovery UI
     private lateinit var statusText: TextView
+    private lateinit var ipAddressText: TextView
     private lateinit var scanButton: Button
     private lateinit var devicesRecyclerView: RecyclerView
     private lateinit var discoveryProgressBar: ProgressBar
@@ -161,6 +162,7 @@ class MainActivity : AppCompatActivity() {
     private fun setupViews() {
         // Discovery views
         statusText = findViewById(R.id.statusText)
+        ipAddressText = findViewById(R.id.ipAddressText)
         scanButton = findViewById(R.id.scanButton)
         devicesRecyclerView = findViewById(R.id.devicesRecyclerView)
         discoveryProgressBar = findViewById(R.id.discoveryProgressBar)
@@ -286,6 +288,14 @@ class MainActivity : AppCompatActivity() {
                 config?.let {
                     delaySeekBar.progress = it.celebrationDelaySeconds
                     delayValueText.text = "${it.celebrationDelaySeconds}s"
+                    
+                    // Display IP address if available
+                    if (!it.ipAddress.isNullOrBlank()) {
+                        ipAddressText.text = "IP: ${it.ipAddress}"
+                        ipAddressText.visibility = View.VISIBLE
+                    } else {
+                        ipAddressText.visibility = View.GONE
+                    }
                 }
             }
         }

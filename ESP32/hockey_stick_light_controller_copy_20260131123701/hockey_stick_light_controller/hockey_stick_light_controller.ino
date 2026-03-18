@@ -6,7 +6,7 @@
 */
 
 #define LED_PIN 10      // D10 on XIAO
-#define LED_COUNT 300
+#define LED_COUNT 100
 #define BRIGHTNESS 60
 #define RX_PIN 20       // D7 on XIAO  
 #define TX_PIN 21       // D6 on XIAO
@@ -104,9 +104,9 @@ void parseCelebration(String data) {
 void triggerGoal() {
   isCelebrating = true;
   celebrationStartTime = millis();
-  // Standard 3-blink
+  // Blink first 10 LEDs 3 times
   for (int b = 0; b < 3; b++) {
-    for(int i=0; i<strip.numPixels(); i++) strip.setPixelColor(i, activeColors[0]);
+    for(int i=0; i<10; i++) strip.setPixelColor(i, activeColors[0]);
     strip.show(); delay(300);
     strip.clear(); strip.show(); delay(300);
   }
@@ -118,7 +118,8 @@ void updateCelebration() {
     return;
   }
 
-  int unitSize = 10;
+  // For 3 colors: 33 LEDs each, for 2 colors: 50 LEDs each
+  int unitSize = strip.numPixels() / activeColorCount;
   int patternLength = activeColorCount * unitSize;
 
   for (int i = 0; i < strip.numPixels(); i++) {

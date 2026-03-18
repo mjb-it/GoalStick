@@ -144,8 +144,28 @@ class BluetoothServer:
         user_config = config_store.load()
         return {
             "team_abbr": user_config.team_abbr,
-            "celebration_delay_seconds": user_config.celebration_delay_seconds
+            "celebration_delay_seconds": user_config.celebration_delay_seconds,
+            "ip_address": self._get_ip_address()
         }
+    
+    def _get_ip_address(self) -> Optional[str]:
+        """Get the current IP address of wlan0."""
+        try:
+            result = subprocess.run(
+                ["ip", "-4", "addr", "show", "wlan0"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                for line in result.stdout.split('\n'):
+                    if 'inet ' in line:
+                        parts = line.strip().split()
+                        addr = parts[1].split('/')[0]
+                        return addr
+        except Exception:
+            pass
+        return None
     
     def _get_local_bluetooth_address(self) -> Optional[str]:
         """Get the local Bluetooth adapter MAC address."""
@@ -477,9 +497,10 @@ class BluetoothCommandServer:
             config = self.config_store.load()
             return {
                 "team_abbr": config.team_abbr,
-                "celebration_delay_seconds": config.celebration_delay_seconds
+                "celebration_delay_seconds": config.celebration_delay_seconds,
+                "ip_address": self._get_ip_address()
             }
-        return {"team_abbr": "WSH", "celebration_delay_seconds": 0}
+        return {"team_abbr": "WSH", "celebration_delay_seconds": 0, "ip_address": None}
     
     def _trigger_test_goal(self) -> None:
         """Trigger a test goal celebration."""

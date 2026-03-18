@@ -210,7 +210,8 @@ class BluetoothManager(private val context: Context) {
                     val configJson = responseJson.optJSONObject("config")
                     GoalStickConfig(
                         teamAbbr = configJson?.optString("team_abbr"),
-                        celebrationDelaySeconds = configJson?.optInt("celebration_delay_seconds", 0) ?: 0
+                        celebrationDelaySeconds = configJson?.optInt("celebration_delay_seconds", 0) ?: 0,
+                        ipAddress = configJson?.optString("ip_address")
                     )
                 } else {
                     null
