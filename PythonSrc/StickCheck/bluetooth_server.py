@@ -491,6 +491,25 @@ class BluetoothCommandServer:
                         return addr
         return None
     
+    def _get_ip_address(self) -> Optional[str]:
+        """Get the current IP address of wlan0."""
+        try:
+            result = subprocess.run(
+                ["ip", "-4", "addr", "show", "wlan0"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                for line in result.stdout.split('\n'):
+                    if 'inet ' in line:
+                        parts = line.strip().split()
+                        addr = parts[1].split('/')[0]
+                        return addr
+        except Exception:
+            pass
+        return None
+    
     def _get_current_config(self) -> dict:
         """Get current configuration."""
         if self.config_store:
