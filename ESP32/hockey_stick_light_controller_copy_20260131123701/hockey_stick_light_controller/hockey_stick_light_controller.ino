@@ -72,6 +72,11 @@ void loop() {
       Serial.println("Received ping");
       Serial1.println("PONG");
       Serial.println("PONG");
+    } else {
+      // Unknown command - log it
+      Serial.print("Unknown command: '");
+      Serial.print(input);
+      Serial.println("'");
     }
   }
 
@@ -102,6 +107,12 @@ void parseCelebration(String data) {
 }
 
 void triggerGoal() {
+  // Safety check - need at least one color
+  if (activeColorCount == 0) {
+    Serial.println("Error: No colors set for celebration");
+    return;
+  }
+  
   isCelebrating = true;
   celebrationStartTime = millis();
   // Blink all LEDs 3 times, divided by team colors
