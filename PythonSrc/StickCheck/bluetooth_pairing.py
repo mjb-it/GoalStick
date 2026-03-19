@@ -18,7 +18,7 @@ class PairingStatus(Enum):
 
 @dataclass
 class BluetoothConfig:
-    device_name: str = "GoalStick"
+    device_name: str = None  # Will use hostname if None
     pairing_timeout: int = 180  # 3 minutes in seconds
     discoverable_timeout: int = 180
 
@@ -32,6 +32,10 @@ LED_PAIRING_TIMEOUT = ["FF0000"]  # Red - timeout/failure
 class BluetoothPairing:
     def __init__(self, config: BluetoothConfig = None, led_controller=None):
         self.config = config or BluetoothConfig()
+        # Use hostname as device name if not specified
+        if self.config.device_name is None:
+            import socket
+            self.config.device_name = socket.gethostname()
         self.led_controller = led_controller
         self._pairing_active = False
         self._connected_device: Optional[str] = None

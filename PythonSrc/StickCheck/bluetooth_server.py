@@ -24,7 +24,7 @@ class ReceivedConfig:
 
 @dataclass
 class BluetoothServerConfig:
-    device_name: str = "GoalStick"
+    device_name: str = None  # Will use hostname if None
     timeout: int = 180  # 3 minutes
     channel: int = 1
 
@@ -34,6 +34,10 @@ class BluetoothServer:
     
     def __init__(self, config: BluetoothServerConfig = None, led_controller=None):
         self.config = config or BluetoothServerConfig()
+        # Use hostname as device name if not specified
+        if self.config.device_name is None:
+            import socket
+            self.config.device_name = socket.gethostname()
         self.led_controller = led_controller
         self._running = False
         self._server_socket = None

@@ -37,7 +37,7 @@ class SchedulerConfig:
     serial_baud_rate: int = 115200
     team_colors_path: str = None  # Path to team_colors.json, None for default
     # Bluetooth settings
-    bluetooth_device_name: str = "GoalStick"
+    bluetooth_device_name: str = None  # Will use hostname if None
     bluetooth_pairing_timeout: int = 180  # 3 minutes
     # Button settings
     pairing_button_pin: int = 17  # BCM GPIO pin for pairing button
