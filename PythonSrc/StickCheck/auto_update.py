@@ -226,6 +226,12 @@ def update_esp32_firmware() -> bool:
         return False
     
     try:
+        import RPi.GPIO as GPIO
+        
+        # GPIO pins for ESP32 bootloader control
+        BOOT_PIN = 13   # Pi GPIO13 -> ESP32 D9 (GPIO9)
+        RESET_PIN = 27  # Pi GPIO27 -> ESP32 D0 (EN)
+        
         log.info("Compiling ESP32 firmware...")
         
         # Compile the sketch
@@ -241,6 +247,25 @@ def update_esp32_firmware() -> bool:
             return False
         
         log.info("ESP32 compile successful")
+        
+        # Enter bootloader mode
+        log.info("Entering ESP32 bootloader mode...")
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(BOOT_PIN, GPIO.OUT)
+        GPIO.setup(RESET_PIN, GPIO.OUT)
+        
+        # Bootloader entry sequence
+        GPIO.output(BOOT_PIN, GPIO.LOW)   # Hold BOOT low
+        time.sleep(0.1)
+        GPIO.output(RESET_PIN, GPIO.LOW)  # Assert reset
+        time.sleep(0.1)
+        GPIO.output(RESET_PIN, GPIO.HIGH) # Release reset
+        time.sleep(0.1)
+        GPIO.output(BOOT_PIN, GPIO.HIGH)  # Release BOOT
+        time.sleep(0.5)  # Wait for bootloader to be ready
+        
+        # Cleanup GPIO
+        GPIO.cleanup([BOOT_PIN, RESET_PIN])
         
         # Upload to ESP32
         log.info("Uploading ESP32 firmware...")
