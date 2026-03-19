@@ -136,7 +136,7 @@ def setup_button_handler(config: SchedulerConfig):
             return
         
         log.warning("Button held (10s) - initiating FACTORY RESET...")
-        if factory_reset():
+        if factory_reset(led_controller=scheduler.led_controller if scheduler else None):
             log.info("Factory reset complete - rebooting...")
             subprocess.run(["sudo", "reboot"], capture_output=True)
         else:
@@ -328,6 +328,16 @@ def main():
     # Start network watchdog (reboots if no connectivity for 5 minutes)
     network_watchdog = NetworkWatchdog()
     network_watchdog.start()
+    
+    # Flash yellow/amber to indicate boot sequence complete
+    if scheduler.led_controller and scheduler.led_controller.is_connected():
+        try:
+            log.info("Boot sequence complete - flashing yellow indicator")
+            scheduler.led_controller._send_command("C:AAAA00")
+            time.sleep(2)  # Show yellow for 2 seconds
+            scheduler.led_controller._send_command("I")  # Turn off
+        except Exception as e:
+            log.warning(f"Could not send boot complete LED indicator: {e}")
     
     try:
         scheduler.start()

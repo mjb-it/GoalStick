@@ -7,7 +7,7 @@ log = logging.getLogger(__name__)
 CONFIG_PATH = Path("/etc/goalstick/config.json")
 
 
-def factory_reset() -> bool:
+def factory_reset(led_controller=None) -> bool:
     """
     Perform a factory reset:
     - Clear all Bluetooth pairings
@@ -17,6 +17,15 @@ def factory_reset() -> bool:
     Returns True if successful.
     """
     log.warning("FACTORY RESET initiated!")
+    
+    # Flash red to indicate factory reset starting
+    if led_controller and led_controller.is_connected():
+        try:
+            led_controller._send_command("C:FF0000")
+            import time
+            time.sleep(2)  # Show red for 2 seconds
+        except Exception as e:
+            log.warning(f"Could not send factory reset LED indicator: {e}")
     
     success = True
     
