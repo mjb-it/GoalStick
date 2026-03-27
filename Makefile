@@ -207,6 +207,12 @@ deploy:
 	else \
 		echo "BlueZ --compat mode already enabled"; \
 	fi
+	@# Disable Bluetooth Secure Connections to allow legacy SSP pairing with Android
+	@echo "Configuring BlueZ policy (disabling Secure Connections)..."
+	sudo mkdir -p /etc/bluetooth
+	@printf '[Policy]\nSecureConnections = off\n' | sudo tee /etc/bluetooth/main.conf > /dev/null
+	sudo systemctl restart bluetooth
+	@echo "BlueZ policy configured"
 	@# Create deploy directory
 	sudo mkdir -p $(DEPLOY_DIR)
 	@# Copy Python source (excluding __pycache__, .pyc, etc.)

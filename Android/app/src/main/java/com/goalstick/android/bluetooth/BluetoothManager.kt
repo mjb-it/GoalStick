@@ -106,7 +106,7 @@ class BluetoothManager(private val context: Context) {
             
             stopDiscovery()
             
-            bluetoothSocket = device.createRfcommSocketToServiceRecord(SPP_UUID)
+            bluetoothSocket = device.createInsecureRfcommSocketToServiceRecord(SPP_UUID)
             bluetoothSocket?.connect()
             
             outputStream = bluetoothSocket?.outputStream

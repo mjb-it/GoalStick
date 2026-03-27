@@ -1,11 +1,18 @@
 import json
 import logging
 import socket
+import struct
 import subprocess
 import threading
 import time
 from dataclasses import dataclass
 from typing import Optional, Callable
+
+# Bluetooth socket security levels (from Linux kernel bluetooth.h)
+_SOL_BLUETOOTH = 274
+_BT_SECURITY = 4
+_BT_SECURITY_LOW = 1
+_BT_SECURITY_LOW_OPT = struct.pack('BB', _BT_SECURITY_LOW, 0)
 
 from .bluetooth_agent import start_agent, stop_agent
 
@@ -264,6 +271,10 @@ class BluetoothServer:
                 socket.SOCK_STREAM,
                 socket.BTPROTO_RFCOMM
             )
+            # Accept insecure connections (no authentication/encryption required).
+            # Matches Android's createInsecureRfcommSocketToServiceRecord, bypassing
+            # the SSP/bonding handshake that fails on headless devices.
+            self._server_socket.setsockopt(_SOL_BLUETOOTH, _BT_SECURITY, _BT_SECURITY_LOW_OPT)
             self._server_socket.settimeout(self.config.timeout)
             
             # Get local Bluetooth adapter address
@@ -629,6 +640,7 @@ class BluetoothCommandServer:
                 socket.BTPROTO_RFCOMM
             )
             self._server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            self._server_socket.setsockopt(_SOL_BLUETOOTH, _BT_SECURITY, _BT_SECURITY_LOW_OPT)
             self._server_socket.settimeout(5)  # Short timeout for accept to allow clean shutdown
             
             local_addr = self._get_local_bluetooth_address()
