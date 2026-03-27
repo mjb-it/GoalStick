@@ -112,15 +112,16 @@ class BluetoothServer:
         else:
             log.info("Enabled page and inquiry scan (piscan)")
         
-        # Force IO capability to NoInputNoOutput at the HCI level before starting the
-        # agent. bluetoothctl registers the D-Bus agent as NoInputNoOutput but does not
-        # update the btmgmt io-cap, which can be stale from a previous session. With
-        # NoInputNoOutput on both sides (HCI + agent), Android's insecure RFCOMM socket
-        # triggers Just Works (confirm_hint=1) which bluetoothctl auto-confirms silently.
-        # Do NOT pair from Android Settings — Settings always uses MITM required, which
-        # triggers Numeric Comparison that NoInputNoOutput cannot handle.
-        self._run_command(["sudo", "btmgmt", "io-cap", "3"])  # 3 = NoInputNoOutput
-
+        # Note: do NOT run btmgmt io-cap here. Bluetoothd overrides the io-cap to
+        # KeyboardDisplay (0x04) whenever an agent registers — any prior btmgmt io-cap
+        # setting is ignored. The actual pairing algorithm (Just Works vs Numeric
+        # Comparison) is determined by Android's authentication requirements, not the
+        # Pi's advertised io-cap:
+        #   - App (createInsecureRfcommSocketToServiceRecord): No Bonding + MITM not
+        #     required → Just Works (confirm_hint=1) → bluetoothctl auto-confirms.
+        #   - Android Settings: Dedicated Bonding + MITM required → Numeric Comparison
+        #     (confirm_hint=0) → NoInputNoOutput agent cannot handle → fails.
+        # Only connect from the GoalStick app, not from Android Bluetooth Settings.
         try:
             start_agent()
             log.info("Started Bluetooth auto-pair agent (NoInputNoOutput)")
