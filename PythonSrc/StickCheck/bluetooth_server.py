@@ -112,19 +112,14 @@ class BluetoothServer:
         else:
             log.info("Enabled page and inquiry scan (piscan)")
         
-        # Set IO capability at HCI management level to match our agent (DisplayYesNo).
-        # This ensures bluetoothd advertises the correct IO capability in pairing exchanges.
-        self._run_command(["sudo", "btmgmt", "io-cap", "1"])  # 1 = DisplayYesNo
-
-        # Start the D-Bus Bluetooth agent for automatic PIN-less pairing
+        # Start the D-Bus Bluetooth agent for automatic PIN-less pairing.
+        # bluetoothctl sets the IO capability to NoInputNoOutput when it registers
+        # as agent — no need to set it separately via btmgmt.
         try:
             start_agent()
-            log.info("Started Bluetooth auto-pair agent (DisplayYesNo, auto-confirm)")
+            log.info("Started Bluetooth auto-pair agent (NoInputNoOutput)")
         except Exception as e:
             log.warning(f"Could not start Bluetooth agent: {e}")
-            # Fall back to bluetoothctl commands
-            self._run_command(["bluetoothctl", "agent", "DisplayYesNo"])
-            self._run_command(["bluetoothctl", "default-agent"])
         
         # Also try bluetoothctl for compatibility
         self._run_command(["bluetoothctl", "discoverable", "on"])
