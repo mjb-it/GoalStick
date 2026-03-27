@@ -112,9 +112,15 @@ class BluetoothServer:
         else:
             log.info("Enabled page and inquiry scan (piscan)")
         
-        # Start the D-Bus Bluetooth agent for automatic PIN-less pairing.
-        # bluetoothctl sets the IO capability to NoInputNoOutput when it registers
-        # as agent — no need to set it separately via btmgmt.
+        # Force IO capability to NoInputNoOutput at the HCI level before starting the
+        # agent. bluetoothctl registers the D-Bus agent as NoInputNoOutput but does not
+        # update the btmgmt io-cap, which can be stale from a previous session. With
+        # NoInputNoOutput on both sides (HCI + agent), Android's insecure RFCOMM socket
+        # triggers Just Works (confirm_hint=1) which bluetoothctl auto-confirms silently.
+        # Do NOT pair from Android Settings — Settings always uses MITM required, which
+        # triggers Numeric Comparison that NoInputNoOutput cannot handle.
+        self._run_command(["sudo", "btmgmt", "io-cap", "3"])  # 3 = NoInputNoOutput
+
         try:
             start_agent()
             log.info("Started Bluetooth auto-pair agent (NoInputNoOutput)")
