@@ -1,158 +1,107 @@
 """
 Bluetooth pairing agent that automatically accepts pairing requests without PIN.
-This enables headless operation where no user interaction is needed on the Pi.
+Uses bluetoothctl as a subprocess so BlueZ's own D-Bus/mainloop integration
+handles the agent registration — more reliable than a Python D-Bus agent in a thread.
 """
 
-import dbus
-import dbus.service
-import dbus.mainloop.glib
-from gi.repository import GLib
 import logging
+import subprocess
 import threading
-
-# Must be initialized at module level, before any D-Bus connections are created.
-# threads_init() is required when D-Bus is used from non-main threads.
-dbus.mainloop.glib.threads_init()
-dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
+import time
 
 log = logging.getLogger(__name__)
 
-AGENT_INTERFACE = "org.bluez.Agent1"
-AGENT_PATH = "/com/goalstick/agent"
-
-
-class AutoPairAgent(dbus.service.Object):
-    """
-    Bluetooth agent that automatically accepts all pairing requests.
-    Registered as DisplayYesNo so BlueZ calls RequestConfirmation for Just Works
-    pairing rather than trying to auto-handle it internally.
-    """
-    
-    def __init__(self, bus, path):
-        super().__init__(bus, path)
-        self.bus = bus
-    
-    @dbus.service.method(AGENT_INTERFACE, in_signature="", out_signature="")
-    def Release(self):
-        log.info("AGENT: Release called")
-
-    @dbus.service.method(AGENT_INTERFACE, in_signature="os", out_signature="")
-    def AuthorizeService(self, device, uuid):
-        log.info(f"AGENT: AuthorizeService called - uuid={uuid} device={device}")
-        return  # Auto-authorize all services
-
-    @dbus.service.method(AGENT_INTERFACE, in_signature="o", out_signature="s")
-    def RequestPinCode(self, device):
-        log.info(f"AGENT: RequestPinCode called - device={device}")
-        return "0000"
-
-    @dbus.service.method(AGENT_INTERFACE, in_signature="o", out_signature="u")
-    def RequestPasskey(self, device):
-        log.info(f"AGENT: RequestPasskey called - device={device}")
-        return dbus.UInt32(0)
-
-    @dbus.service.method(AGENT_INTERFACE, in_signature="ouq", out_signature="")
-    def DisplayPasskey(self, device, passkey, entered):
-        log.info(f"AGENT: DisplayPasskey called - passkey={passkey} device={device}")
-
-    @dbus.service.method(AGENT_INTERFACE, in_signature="os", out_signature="")
-    def DisplayPinCode(self, device, pincode):
-        log.info(f"AGENT: DisplayPinCode called - pincode={pincode} device={device}")
-
-    @dbus.service.method(AGENT_INTERFACE, in_signature="ou", out_signature="")
-    def RequestConfirmation(self, device, passkey):
-        log.info(f"AGENT: RequestConfirmation called - AUTO-CONFIRMING passkey={passkey} device={device}")
-        return  # Auto-confirm by returning without error
-
-    @dbus.service.method(AGENT_INTERFACE, in_signature="o", out_signature="")
-    def RequestAuthorization(self, device):
-        log.info(f"AGENT: RequestAuthorization called - AUTO-AUTHORIZING device={device}")
-        return  # Auto-authorize
-
-    @dbus.service.method(AGENT_INTERFACE, in_signature="", out_signature="")
-    def Cancel(self):
-        log.info("AGENT: Cancel called")
-
 
 class BluetoothAgentManager:
-    """Manages the Bluetooth agent lifecycle."""
-    
+    """
+    Runs bluetoothctl as a persistent subprocess registered as a NoInputNoOutput
+    Bluetooth agent. bluetoothctl handles the BlueZ D-Bus wiring internally, which
+    avoids GLib mainloop threading issues that cause Python D-Bus agents to not
+    receive calls from bluetoothd.
+    """
+
     def __init__(self):
-        self._agent = None
-        self._mainloop = None
-        self._thread = None
+        self._proc = None
+        self._monitor_thread = None
         self._running = False
-    
+
     def start(self):
-        """Start the Bluetooth agent in a background thread."""
+        """Start bluetoothctl and register it as the default Bluetooth agent."""
         if self._running:
             return
 
         self._running = True
-        self._registered = threading.Event()
-        self._thread = threading.Thread(target=self._run_agent, daemon=True)
-        self._thread.start()
-        # Wait up to 2s to confirm the agent actually registered
-        if self._registered.wait(timeout=2.0):
-            log.info("Bluetooth agent started")
-        else:
-            log.error("Bluetooth agent failed to start (registration timed out or errored)")
-    
-    def stop(self):
-        """Stop the Bluetooth agent."""
-        self._running = False
-        if self._agent:
-            try:
-                # Unregister from BlueZ AgentManager
-                bus = dbus.SystemBus()
-                manager = dbus.Interface(
-                    bus.get_object("org.bluez", "/org/bluez"),
-                    "org.bluez.AgentManager1"
-                )
-                manager.UnregisterAgent(AGENT_PATH)
-            except Exception as e:
-                log.debug(f"Agent unregister from BlueZ: {e}")
-            try:
-                # Remove D-Bus object path so it can be re-registered next time
-                self._agent.remove_from_connection()
-            except Exception as e:
-                log.debug(f"Agent remove_from_connection: {e}")
-            self._agent = None
-        if self._mainloop:
-            self._mainloop.quit()
-        log.info("Bluetooth agent stopped")
-    
-    def _run_agent(self):
-        """Run the agent main loop."""
         try:
-            bus = dbus.SystemBus()
-
-            # Create and register agent
-            self._agent = AutoPairAgent(bus, AGENT_PATH)
-
-            # Get AgentManager
-            manager = dbus.Interface(
-                bus.get_object("org.bluez", "/org/bluez"),
-                "org.bluez.AgentManager1"
+            self._proc = subprocess.Popen(
+                ['bluetoothctl'],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                bufsize=0
             )
 
-            # Register with DisplayYesNo capability so BlueZ calls RequestConfirmation
-            # on our agent for Just Works pairing (confirm_hint=1), rather than
-            # attempting to auto-handle it internally (which fails on some BlueZ versions).
-            manager.RegisterAgent(AGENT_PATH, "DisplayYesNo")
-            manager.RequestDefaultAgent(AGENT_PATH)
+            # Drain stdout in background so the process never blocks on output
+            self._drain_thread = threading.Thread(
+                target=self._drain_stdout, daemon=True
+            )
+            self._drain_thread.start()
 
-            log.info("Bluetooth agent registered with DisplayYesNo capability")
-            self._registered.set()  # Signal that registration succeeded
+            # Give bluetoothctl a moment to initialize its D-Bus connection
+            time.sleep(0.5)
 
-            # Run main loop
-            self._mainloop = GLib.MainLoop()
-            self._mainloop.run()
-            
+            self._proc.stdin.write(b'agent NoInputNoOutput\n')
+            self._proc.stdin.flush()
+            time.sleep(0.2)
+            self._proc.stdin.write(b'default-agent\n')
+            self._proc.stdin.flush()
+
+            log.info("Bluetooth agent started (bluetoothctl NoInputNoOutput)")
+
+            # Monitor for unexpected exit
+            self._monitor_thread = threading.Thread(
+                target=self._monitor, daemon=True
+            )
+            self._monitor_thread.start()
+
         except Exception as e:
-            log.error(f"Bluetooth agent error: {e}")
-        finally:
+            log.error(f"Failed to start bluetoothctl agent: {e}")
             self._running = False
+
+    def _drain_stdout(self):
+        """Read and discard bluetoothctl output to prevent stdout buffer from filling."""
+        try:
+            for line in iter(self._proc.stdout.readline, b''):
+                if line.strip():
+                    log.debug(f"bluetoothctl: {line.decode(errors='replace').strip()}")
+        except Exception:
+            pass
+
+    def _monitor(self):
+        """Detect if bluetoothctl exits unexpectedly."""
+        if self._proc:
+            self._proc.wait()
+            if self._running:
+                log.warning("bluetoothctl agent process exited unexpectedly")
+
+    def stop(self):
+        """Stop the bluetoothctl agent."""
+        self._running = False
+        if self._proc:
+            try:
+                self._proc.stdin.write(b'exit\n')
+                self._proc.stdin.flush()
+            except Exception:
+                pass
+            try:
+                self._proc.terminate()
+                self._proc.wait(timeout=2)
+            except Exception:
+                try:
+                    self._proc.kill()
+                except Exception:
+                    pass
+            self._proc = None
+        log.info("Bluetooth agent stopped")
 
 
 # Global agent manager instance
