@@ -81,15 +81,37 @@ class BluetoothAgentManager:
         """Start the Bluetooth agent in a background thread."""
         if self._running:
             return
-        
+
         self._running = True
+        self._registered = threading.Event()
         self._thread = threading.Thread(target=self._run_agent, daemon=True)
         self._thread.start()
-        log.info("Bluetooth agent started")
+        # Wait up to 2s to confirm the agent actually registered
+        if self._registered.wait(timeout=2.0):
+            log.info("Bluetooth agent started")
+        else:
+            log.error("Bluetooth agent failed to start (registration timed out or errored)")
     
     def stop(self):
         """Stop the Bluetooth agent."""
         self._running = False
+        if self._agent:
+            try:
+                # Unregister from BlueZ AgentManager
+                bus = dbus.SystemBus()
+                manager = dbus.Interface(
+                    bus.get_object("org.bluez", "/org/bluez"),
+                    "org.bluez.AgentManager1"
+                )
+                manager.UnregisterAgent(AGENT_PATH)
+            except Exception as e:
+                log.debug(f"Agent unregister from BlueZ: {e}")
+            try:
+                # Remove D-Bus object path so it can be re-registered next time
+                self._agent.remove_from_connection()
+            except Exception as e:
+                log.debug(f"Agent remove_from_connection: {e}")
+            self._agent = None
         if self._mainloop:
             self._mainloop.quit()
         log.info("Bluetooth agent stopped")
@@ -112,9 +134,10 @@ class BluetoothAgentManager:
             # Register agent with NoInputNoOutput capability
             manager.RegisterAgent(AGENT_PATH, "NoInputNoOutput")
             manager.RequestDefaultAgent(AGENT_PATH)
-            
+
             log.info("Bluetooth agent registered with NoInputNoOutput capability")
-            
+            self._registered.set()  # Signal that registration succeeded
+
             # Run main loop
             self._mainloop = GLib.MainLoop()
             self._mainloop.run()
