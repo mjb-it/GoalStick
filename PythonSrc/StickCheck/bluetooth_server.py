@@ -14,7 +14,6 @@ _BT_SECURITY = 4
 _BT_SECURITY_LOW = 1
 _BT_SECURITY_LOW_OPT = struct.pack('BB', _BT_SECURITY_LOW, 0)
 
-from .bluetooth_agent import start_agent, stop_agent
 
 log = logging.getLogger(__name__)
 
@@ -112,21 +111,14 @@ class BluetoothServer:
         else:
             log.info("Enabled page and inquiry scan (piscan)")
         
-        # Note: do NOT run btmgmt io-cap here. Bluetoothd overrides the io-cap to
-        # KeyboardDisplay (0x04) whenever an agent registers — any prior btmgmt io-cap
-        # setting is ignored. The actual pairing algorithm (Just Works vs Numeric
-        # Comparison) is determined by Android's authentication requirements, not the
-        # Pi's advertised io-cap:
-        #   - App (createInsecureRfcommSocketToServiceRecord): No Bonding + MITM not
-        #     required → Just Works (confirm_hint=1) → bluetoothctl auto-confirms.
-        #   - Android Settings: Dedicated Bonding + MITM required → Numeric Comparison
-        #     (confirm_hint=0) → NoInputNoOutput agent cannot handle → fails.
-        # Only connect from the GoalStick app, not from Android Bluetooth Settings.
-        try:
-            start_agent()
-            log.info("Started Bluetooth auto-pair agent (NoInputNoOutput)")
-        except Exception as e:
-            log.warning(f"Could not start Bluetooth agent: {e}")
+        # No D-Bus agent is registered intentionally. When no agent is registered,
+        # bluetoothd uses NoInputNoOutput IO capability (its default), so the hardware
+        # also sends NoInputNoOutput in the HCI IO Capability Reply — no mismatch.
+        # With Android's createInsecureRfcommSocketToServiceRecord (No Bonding, No MITM)
+        # and Pi's NoInputNoOutput, the result is Just Works (confirm_hint=1), which
+        # bluetoothd auto-accepts when no agent is present. Registering any agent causes
+        # bluetoothd to override IO cap to KeyboardDisplay, which creates an internal
+        # state mismatch that causes immediate rejection of confirm_hint=1.
         
         # Also try bluetoothctl for compatibility
         self._run_command(["bluetoothctl", "discoverable", "on"])
@@ -142,8 +134,7 @@ class BluetoothServer:
         return True
     
     def _cleanup_bluetooth(self) -> None:
-        """Disable discoverable/pairable mode and stop agent."""
-        stop_agent()
+        """Disable discoverable/pairable mode."""
         self._run_command(["bluetoothctl", "discoverable", "off"])
         self._run_command(["bluetoothctl", "pairable", "off"])
     
