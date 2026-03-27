@@ -108,32 +108,32 @@ class MainActivity : AppCompatActivity() {
     private fun autoConnectOrPrompt() {
         val pairedDevices = viewModel.bluetoothManager.getPairedDevices()
         goalStickDevice = pairedDevices.find { device ->
-            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) 
+            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT)
                 == PackageManager.PERMISSION_GRANTED) {
-                device.name == "GoalStick"
+                device.name?.contains("goalstick", ignoreCase = true) == true ||
+                device.name?.contains("goalpi", ignoreCase = true) == true
             } else {
                 false
             }
         }
-        
+
         if (goalStickDevice != null) {
             // Found GoalStick - auto-connect
             statusText.text = "Found GoalStick. Connecting..."
             lifecycleScope.launch {
                 val connected = viewModel.connect(goalStickDevice!!)
                 if (!connected) {
-                    // Connection failed - GoalStick is paired but not accepting connections
-                    // This is normal when Pi is in normal operation mode (not pairing mode)
+                    // Connection failed - GoalStick is not in pairing mode yet
                     showGoalStickNotReadyPrompt()
                 }
             }
         } else {
-            // No GoalStick paired - prompt user to pair
-            statusText.text = "GoalStick not paired. Please pair in Bluetooth settings."
-            showBluetoothSettingsPrompt()
+            // No GoalStick found in paired devices - start scan so user can select it
+            statusText.text = "Scanning for GoalStick..."
+            checkPermissionsAndScan()
         }
     }
-    
+
     private fun showGoalStickNotReadyPrompt() {
         statusText.text = "GoalStick is paired but not in configuration mode.\n\nPress and hold the button on GoalStick for 3 seconds to enter pairing mode, then tap Retry."
         scanButton.text = "Retry Connection"
@@ -148,14 +148,6 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }
-        }
-    }
-    
-    private fun showBluetoothSettingsPrompt() {
-        scanButton.text = "Open Bluetooth Settings"
-        scanButton.setOnClickListener {
-            val intent = Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS)
-            startActivity(intent)
         }
     }
     
