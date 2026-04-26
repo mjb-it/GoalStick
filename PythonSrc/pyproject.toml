@@ -1,6 +1,6 @@
 [project]
 name = "goalstick"
-version = "0.1.0"
+version = "0.5.0"
 description = ""
 authors = [
     {name = "Matt B",email = "calicojack@gmail.com"}
