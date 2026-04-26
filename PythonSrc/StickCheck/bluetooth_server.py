@@ -298,62 +298,61 @@ class BluetoothServer:
                 # Receive and process messages
                 self._client_socket.settimeout(300)  # 5 minute timeout for data
                 data = b""
+                last_received_config = None
                 while self._running:
                     try:
                         chunk = self._client_socket.recv(1024)
                         if not chunk:
                             break
                         data += chunk
-                        
+
                         # Try to parse JSON
                         try:
                             message_json = json.loads(data.decode('utf-8'))
                             data = b""  # Reset buffer after successful parse
-                            
+
                             msg_type = message_json.get("type")
-                            
+
                             if msg_type == "get_config":
-                                # Return current configuration
                                 current_config = self._get_current_config()
                                 response = json.dumps({
                                     "status": "ok",
                                     "config": current_config
                                 })
                                 self._client_socket.send(response.encode('utf-8'))
-                                continue  # Keep listening for more commands
-                            
+
                             elif msg_type == "test_goal":
-                                # Handle test goal - trigger celebration and continue
                                 self._trigger_test_goal()
                                 response = json.dumps({"status": "ok"})
                                 self._client_socket.send(response.encode('utf-8'))
-                                continue  # Keep listening for more commands
-                            
+
                             elif msg_type == "config":
-                                # Handle config - process and return
                                 received_config = self._process_config(message_json)
                                 if received_config:
                                     response = json.dumps({"status": "ok"})
                                     self._client_socket.send(response.encode('utf-8'))
-                                    
+
                                     # Show green LED - success
                                     self._send_led_status(["00FF00"])
-                                    
+
                                     if self._on_config_received:
                                         self._on_config_received(received_config)
-                                    
-                                    return received_config
+
+                                    last_received_config = received_config
+                                    # Keep listening - app may send test_goal or get_config next
                             else:
                                 log.warning(f"Unknown message type: {msg_type}")
                                 response = json.dumps({"status": "error", "message": "unknown type"})
                                 self._client_socket.send(response.encode('utf-8'))
-                                
+
                         except json.JSONDecodeError:
                             # Not complete JSON yet, keep reading
                             continue
                     except socket.timeout:
                         log.warning("Timeout waiting for data")
                         break
+
+                return last_received_config
                 
             except socket.timeout:
                 log.warning("Timeout waiting for Bluetooth connection")
