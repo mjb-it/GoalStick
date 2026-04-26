@@ -344,12 +344,9 @@ class StickCheckScheduler:
     def run_daily_cycle(self) -> None:
         from .status_led import DeviceState
         
-        # Run updates at the start of each daily cycle
-        self._update_status(DeviceState.UPDATING)
-        self._run_updates()
-        
-        # Turn off LED for normal operation
+        # Clear boot state and run updates silently
         self._update_status(DeviceState.OFF)
+        self._run_updates()
         
         if not HockeySeasonDetector.is_hockey_season():
             log.info("Not hockey season - sleeping until tomorrow")
