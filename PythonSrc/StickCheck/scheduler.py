@@ -313,15 +313,22 @@ class StickCheckScheduler:
                 else:
                     # No overlay, can update directly
                     if update_code():
-                        log.info("Code updated - will take effect on next restart")
-                        
-                        # Check if ESP32 firmware needs updating
+                        # Check if ESP32 firmware needs updating before restarting
                         if check_esp32_changes():
                             log.info("ESP32 code changed - updating firmware...")
                             if update_esp32_firmware():
                                 log.info("ESP32 firmware updated successfully")
                             else:
                                 log.warning("ESP32 firmware update failed")
+
+                        log.info("Restarting service to apply updates...")
+                        subprocess.run(
+                            ["sudo", "systemctl", "restart", "goalstick"],
+                            capture_output=True,
+                            text=True
+                        )
+                        # If we reach here, restart failed (normally this process is killed)
+                        log.error("Service restart may have failed - continuing with old code")
             
             # Run system security updates (weekly, on Sundays)
             if datetime.now().weekday() == 6:  # Sunday
