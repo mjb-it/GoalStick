@@ -27,7 +27,8 @@
             android:id="@+id/statusText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Tap scan to find your GoalStick device"
+            android:text="@string/status_idle"
+            android:gravity="center"
             android:layout_gravity="center_horizontal"
             android:layout_marginBottom="8dp" />
 
@@ -43,12 +44,22 @@
             android:layout_marginBottom="16dp"
             android:visibility="gone" />
 
+        <!-- Reconnect Button (shown when a GoalStick was connected before) -->
+        <Button
+            android:id="@+id/reconnectButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/button_reconnect"
+            android:visibility="gone"
+            android:layout_marginBottom="8dp" />
+
         <!-- Scan Button -->
         <Button
             android:id="@+id/scanButton"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Scan for Devices"
+            android:text="@string/button_scan"
             android:layout_marginBottom="16dp" />
 
         <!-- Discovery Progress -->
@@ -84,15 +95,23 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="WiFi Configuration"
+                android:text="@string/section_wifi"
                 android:textSize="20sp"
                 android:textStyle="bold"
-                android:layout_marginBottom="16dp" />
+                android:layout_marginBottom="8dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/wifi_help"
+                android:textSize="12sp"
+                android:textColor="@android:color/darker_gray"
+                android:layout_marginBottom="12dp" />
 
             <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="WiFi Network Name (SSID)"
+                android:hint="@string/hint_ssid"
                 style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                 android:layout_marginBottom="12dp">
 
@@ -107,7 +126,7 @@
             <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="WiFi Password"
+                android:hint="@string/hint_password"
                 style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                 app:endIconMode="password_toggle"
                 android:layout_marginBottom="16dp">
@@ -123,7 +142,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Select Your Team"
+                android:text="@string/section_team"
                 android:textSize="16sp"
                 android:textStyle="bold"
                 android:layout_marginBottom="8dp" />
@@ -141,7 +160,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Broadcast Delay (seconds)"
+                android:text="@string/section_delay"
                 android:textSize="16sp"
                 android:textStyle="bold"
                 android:layout_marginBottom="8dp" />
@@ -149,7 +168,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Delay the light celebration to sync with your TV broadcast"
+                android:text="@string/delay_help"
                 android:textSize="12sp"
                 android:textColor="@android:color/darker_gray"
                 android:layout_marginBottom="8dp" />
@@ -183,7 +202,7 @@
                 android:id="@+id/sendConfigButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Send Configuration"
+                android:text="@string/button_send_config"
                 android:enabled="false" />
 
             <View
@@ -195,7 +214,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Test"
+                android:text="@string/section_test"
                 android:textSize="20sp"
                 android:textStyle="bold"
                 android:layout_marginBottom="16dp" />
@@ -204,7 +223,7 @@
                 android:id="@+id/testGoalButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="🚨 Test Goal Celebration"
+                android:text="@string/button_test_goal"
                 android:backgroundTint="#C8102E"
                 android:enabled="false" />
 
@@ -215,6 +234,14 @@
                 android:layout_gravity="center_horizontal"
                 android:layout_marginTop="16dp"
                 android:visibility="gone" />
+
+            <Button
+                android:id="@+id/disconnectButton"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/button_disconnect"
+                android:layout_marginTop="24dp" />
 
         </LinearLayout>
 

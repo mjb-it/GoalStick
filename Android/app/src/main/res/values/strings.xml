@@ -1,3 +1,40 @@
 <resources>
     <string name="app_name">GoalStick</string>
+
+    <!-- Status -->
+    <string name="status_idle">Tap Scan to find your GoalStick. If it has been set up before, tap Reconnect.</string>
+    <string name="status_scanning">Scanning for devices…</string>
+    <string name="status_connecting">Connecting…</string>
+    <string name="status_connected">Connected! Configure your GoalStick below.</string>
+    <string name="status_disconnected">Disconnected from GoalStick.</string>
+    <string name="status_no_devices">No GoalStick found. Hold its button for 3 seconds until the light blinks blue, then scan again.</string>
+    <string name="status_pick_device">Select your GoalStick from the list.</string>
+    <string name="ip_address">IP: %1$s</string>
+    <string name="delay_value">%1$ds</string>
+    <string name="unknown_device">Unknown Device</string>
+
+    <!-- Buttons -->
+    <string name="button_scan">Scan for Devices</string>
+    <string name="button_reconnect">Reconnect to Last GoalStick</string>
+    <string name="button_send_config">Send Configuration</string>
+    <string name="button_test_goal">🚨 Test Goal Celebration</string>
+    <string name="button_disconnect">Disconnect</string>
+
+    <!-- Configuration -->
+    <string name="section_wifi">WiFi Configuration</string>
+    <string name="hint_ssid">WiFi Network Name (SSID)</string>
+    <string name="hint_password">WiFi Password</string>
+    <string name="wifi_help">WiFi is only changed when a password is entered, and only while GoalStick is in pairing mode (blue blinking light). Leave the password empty to keep the current network.</string>
+    <string name="section_team">Select Your Team</string>
+    <string name="section_delay">Broadcast Delay (seconds)</string>
+    <string name="delay_help">Delay the light celebration to sync with your TV broadcast</string>
+    <string name="section_test">Test</string>
+    <string name="error_ssid_required">WiFi network name required</string>
+    <string name="error_password_length">Password must be 8 to 63 characters</string>
+
+    <!-- Toasts -->
+    <string name="toast_bt_permissions">Bluetooth permissions are required to find GoalStick</string>
+    <string name="toast_bt_unsupported">Bluetooth is not supported on this device</string>
+    <string name="toast_bt_disabled">Please turn on Bluetooth</string>
+    <string name="toast_scan_failed">Could not start scanning. Check that Bluetooth and Location are on.</string>
 </resources>

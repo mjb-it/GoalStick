@@ -16,7 +16,6 @@ data class GoalStickConfig(
 object TeamData {
     val teams = listOf(
         "ANA" to "Anaheim Ducks",
-        "ARI" to "Arizona Coyotes",
         "BOS" to "Boston Bruins",
         "BUF" to "Buffalo Sabres",
         "CGY" to "Calgary Flames",
@@ -43,6 +42,7 @@ object TeamData {
         "STL" to "St. Louis Blues",
         "TBL" to "Tampa Bay Lightning",
         "TOR" to "Toronto Maple Leafs",
+        "UTA" to "Utah Mammoth",
         "VAN" to "Vancouver Canucks",
         "VGK" to "Vegas Golden Knights",
         "WSH" to "Washington Capitals",

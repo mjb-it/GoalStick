@@ -268,11 +268,18 @@ class CommandHandler:
 
         ssid = message.get("wifi_ssid") or ""
         password = message.get("wifi_password") or ""
-        wants_wifi = bool(ssid or password)
+        if not (isinstance(ssid, str) and isinstance(password, str)):
+            return self._error("invalid wifi credentials")
+        # Older app versions always include the phone's current SSID even when
+        # the user only wants to change the team. Treat WiFi as requested only
+        # when a password was supplied.
+        wants_wifi = bool(password)
+        if ssid and not password:
+            log.info("Ignoring wifi_ssid without a password")
+        if wants_wifi and not ssid:
+            return self._error("wifi_ssid is required with wifi_password")
         if wants_wifi and not self.allow_wifi:
             return self._error("wifi configuration requires pairing mode")
-        if wants_wifi and not (isinstance(ssid, str) and isinstance(password, str)):
-            return self._error("invalid wifi credentials")
 
         log.info(f"Received config - Team: {team}, Delay: {delay}, WiFi: {'yes' if wants_wifi else 'no'}")
 

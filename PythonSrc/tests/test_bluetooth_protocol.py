@@ -187,6 +187,23 @@ class TestCommandHandler:
         assert called == []
         assert store.get_team() == "WSH"  # nothing applied
 
+    def test_ssid_without_password_is_ignored(self, handler, store, monkeypatch):
+        import StickCheck.wifi_config as wc
+        called = []
+        monkeypatch.setattr(wc, "configure_wifi", lambda s, p: called.append(1) or True)
+        resp = handler.handle({"type": "config", "team_abbr": "TOR", "wifi_ssid": "Home", "wifi_password": ""})
+        assert resp == {"status": "ok", "wifi": "skipped"}
+        assert store.get_team() == "TOR"
+        assert called == []
+
+    def test_password_without_ssid_rejected(self, store, led):
+        h = CommandHandler(led_controller=led, config_store=store, allow_wifi=True)
+        assert h.handle({"type": "config", "wifi_password": "secret123"})["status"] == "error"
+
+    def test_non_string_wifi_fields_rejected(self, store, led):
+        h = CommandHandler(led_controller=led, config_store=store, allow_wifi=True)
+        assert h.handle({"type": "config", "wifi_ssid": 5, "wifi_password": "secret123"})["status"] == "error"
+
     def test_wifi_applied_in_pairing_mode(self, store, led, monkeypatch):
         import StickCheck.wifi_config as wc
         called = []
