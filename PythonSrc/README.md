@@ -194,7 +194,10 @@ make service-uninstall
 | Path | Description |
 |------|-------------|
 | `/opt/goalstick` | Application code (production) |
-| `/etc/goalstick/config.json` | Configuration file |
+| `/etc/goalstick/config.json` | Configuration file (written atomically) |
+| `/etc/goalstick/network_watchdog.json` | Network watchdog reboot counter |
+| `/etc/goalstick/update-allowed-signers` | Optional: SSH keys allowed to sign updates |
+| `/etc/NetworkManager/system-connections/goalstick-wifi.nmconnection` | WiFi profile written during pairing (mode 0600) |
 | `/var/log/goalstick/goalstick.log` | Log file (rotates weekly) |
 
 ## Manual Usage
@@ -221,8 +224,79 @@ python main.py --show-team
 ## Auto-Updates
 
 The service automatically:
-- **Daily (8 AM)**: Checks for code updates via `git pull`
+- **Daily (8 AM)**: Fast-forwards to the tracked upstream branch and reinstalls the package
 - **Weekly (Sundays)**: Runs system security updates
+
+Safeguards:
+- Updates are only taken from an `https://` remote and only when upstream is a
+  pure fast-forward of the installed commit. Diverged history is refused.
+- Optionally, every update can be required to carry a valid SSH commit
+  signature. Create `/etc/goalstick/update-allowed-signers` in git's
+  allowed-signers format and sign your commits:
+
+  ```bash
+  # On the Pi
+  echo "you@example.com ssh-ed25519 AAAA...your-public-key" | sudo tee /etc/goalstick/update-allowed-signers
+
+  # On your development machine
+  git config gpg.format ssh
+  git config user.signingkey ~/.ssh/id_ed25519.pub
+  git config commit.gpgsign true
+  ```
+
+  While the file is absent, updates are applied unsigned (the default).
+
+## Reliability Behaviour
+
+- **systemd watchdog**: the service pings systemd every 20s from a dedicated
+  thread in every mode (normal, waiting for WiFi, pairing). A hung process is
+  restarted within 60s.
+- **Scheduler**: an unexpected error in the daily cycle is logged with a
+  traceback and the cycle retries after 60s instead of exiting.
+- **Clock jumps**: long sleeps are taken in 60s chunks against the wall clock,
+  so an NTP step after boot does not delay the daily check by a day.
+- **Game states**: `FINAL`/`OFF` and postponed/suspended/cancelled games
+  (`gameScheduleState` of `PPD`/`SUSP`/`CNCL`) end monitoring immediately.
+- **Network watchdog**: after 5 minutes offline the WiFi interface is
+  restarted; after 15 minutes the Pi reboots, at most 3 times in a row
+  without connectivity returning. Connectivity is probed with ping and a TCP
+  connect to the NHL API so ICMP-blocking networks are not misdetected. The
+  LED strip blinks red while offline.
+- **Config writes** go to a temp file and are renamed into place, so power
+  loss cannot truncate `config.json`.
+
+## Bluetooth Protocol
+
+The Android app talks to the Pi over RFCOMM (SPP, channel 1) using one JSON
+object per message, newline-terminated. Bare back-to-back objects without a
+newline are also accepted for older app versions. Responses are always a
+JSON object followed by `
+` with `"status": "ok"` or
+`"status": "error"` plus `"message"`.
+
+| Type | Direction | Notes |
+|------|-----------|-------|
+| `ping` | app → Pi | Replies `{"status":"ok","type":"pong"}` |
+| `get_config` | app → Pi | Returns `team_abbr`, `celebration_delay_seconds`, `ip_address` |
+| `test_goal` | app → Pi | Fires a celebration; rate-limited to one per 3s |
+| `config` | app → Pi | `team_abbr`, `celebration_delay_seconds`, and in **pairing mode only** `wifi_ssid`/`wifi_password` |
+
+Validation on the Pi: team abbreviations must be 2-3 letters and present in
+`team_colors.json`; delays are clamped to 0-180s; SSIDs must be 1-32 bytes
+with no control characters; passphrases must be 8-63 printable ASCII
+characters or a 64-hex PSK. Messages over 4 KB or non-UTF-8 data close the
+connection.
+
+Two servers share this protocol:
+- **Pairing mode** (button hold 3s or `main.py --pair`): adapter is
+  discoverable for 3 minutes and WiFi credentials are accepted. This is the
+  only path that can change WiFi, so physical access to the button is the gate.
+- **Background server** (always on): accepts `ping`, `get_config`,
+  `test_goal` and team/delay changes. WiFi fields are refused.
+
+The RFCOMM socket uses `BT_SECURITY_LOW` to match the app's insecure socket;
+on a headless Pi Just Works pairing is the only workable option. See the
+module docstring in `StickCheck/bluetooth_server.py`.
 
 ## Read-Only Filesystem (Optional)
 

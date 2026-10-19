@@ -3,63 +3,65 @@ import logging.handlers
 import signal
 import subprocess
 import sys
+import threading
 import time
 import argparse
 from pathlib import Path
 from StickCheck import (
-    StickCheckScheduler, 
+    StickCheckScheduler,
     SchedulerConfig,
-    BluetoothPairing,
-    BluetoothConfig,
     BluetoothServer,
     BluetoothServerConfig,
     BluetoothCommandServer,
     LEDController,
     LEDConfig,
     ConfigStore,
-    PairingStatus,
     ButtonHandler,
     ButtonConfig,
     factory_reset,
-    check_for_updates,
-    update_and_restart,
     NetworkWatchdog,
-    NetworkWatchdogConfig,
     StatusLED,
     DeviceState,
+    SystemdWatchdog,
     is_wifi_configured
 )
 
+# Factory reset is ignored for this long after start so a stuck button or a
+# floating GPIO pin during boot cannot wipe the device.
+FACTORY_RESET_MIN_UPTIME = 60
+
+
 def setup_logging():
     """Set up logging with rotating file handler (weekly rotation, keep 4 weeks)."""
-    log_dir = Path("/var/log/goalstick")
-    log_dir.mkdir(parents=True, exist_ok=True)
-    log_file = log_dir / "goalstick.log"
-    
     formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-    
-    # Rotating file handler - rotate weekly, keep 4 backups
-    file_handler = logging.handlers.TimedRotatingFileHandler(
-        log_file,
-        when="W0",  # Rotate on Monday
-        interval=1,
-        backupCount=4,
-        encoding="utf-8"
-    )
-    file_handler.setFormatter(formatter)
-    file_handler.setLevel(logging.INFO)
-    
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+
     # Console handler for systemd/journald
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(formatter)
     console_handler.setLevel(logging.INFO)
-    
-    # Configure root logger
-    root_logger = logging.getLogger()
-    root_logger.setLevel(logging.INFO)
-    root_logger.addHandler(file_handler)
     root_logger.addHandler(console_handler)
-    
+
+    # Rotating file handler - rotate weekly, keep 4 backups. Optional: on a
+    # developer machine /var/log may not be writable.
+    try:
+        log_dir = Path("/var/log/goalstick")
+        log_dir.mkdir(parents=True, exist_ok=True)
+        file_handler = logging.handlers.TimedRotatingFileHandler(
+            log_dir / "goalstick.log",
+            when="W0",  # Rotate on Monday
+            interval=1,
+            backupCount=4,
+            encoding="utf-8"
+        )
+        file_handler.setFormatter(formatter)
+        file_handler.setLevel(logging.INFO)
+        root_logger.addHandler(file_handler)
+    except OSError as e:
+        root_logger.warning(f"File logging disabled: {e}")
+
     # Silence noisy httpx logging
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
@@ -68,290 +70,285 @@ setup_logging()
 
 log = logging.getLogger(__name__)
 
-scheduler = None
-button_handler = None
-network_watchdog = None
-status_led = None
-bt_command_server = None
-pairing_in_progress = False
-factory_reset_enabled = False
-service_start_time = None
 
-def signal_handler(sig, frame):
-    print("\nShutting down gracefully...")
-    if button_handler:
-        button_handler.stop()
-    if network_watchdog:
-        network_watchdog.stop()
-    if status_led:
-        status_led.stop()
-    if scheduler:
-        scheduler.stop()
-    sys.exit(0)
+class Service:
+    """Owns every long-running component so shutdown is one place."""
 
-def setup_button_handler(config: SchedulerConfig):
-    global pairing_in_progress, factory_reset_enabled, service_start_time
-    import time
-    
-    service_start_time = time.time()
-    
-    def on_button_hold():
-        global pairing_in_progress, bt_command_server
-        if pairing_in_progress:
+    def __init__(self, config: SchedulerConfig):
+        self.config = config
+        self.scheduler = None
+        self.button_handler = None
+        self.network_watchdog = None
+        self.status_led = None
+        self.bt_command_server = None
+        self.systemd_watchdog = SystemdWatchdog()
+        self.pairing_in_progress = False
+        self.factory_reset_enabled = False
+        self.service_start_time = time.time()
+        self._stop_event = threading.Event()
+        self._shutdown_lock = threading.Lock()
+        self._shut_down = False
+
+    # ------------------------------------------------------------------
+    # Lifecycle
+    # ------------------------------------------------------------------
+
+    def shutdown(self) -> None:
+        with self._shutdown_lock:
+            if self._shut_down:
+                return
+            self._shut_down = True
+        log.info("Shutting down...")
+        self._stop_event.set()
+        for name in ("button_handler", "network_watchdog", "bt_command_server", "scheduler", "status_led"):
+            component = getattr(self, name)
+            if component:
+                try:
+                    component.stop()
+                except Exception as e:
+                    log.warning(f"Error stopping {name}: {e}")
+        self.systemd_watchdog.stop()
+
+    def install_signal_handlers(self) -> None:
+        def handler(sig, frame):
+            log.info(f"Received signal {sig}")
+            self._stop_event.set()
+            if self.scheduler:
+                self.scheduler.stop()
+        signal.signal(signal.SIGINT, handler)
+        signal.signal(signal.SIGTERM, handler)
+
+    # ------------------------------------------------------------------
+    # Button
+    # ------------------------------------------------------------------
+
+    def _on_button_hold(self) -> None:
+        if self.pairing_in_progress:
             log.info("Pairing already in progress, ignoring button hold")
             return
-        
-        pairing_in_progress = True
+
+        self.pairing_in_progress = True
         log.info("Button held (3s) - initiating Bluetooth pairing...")
+        if self.status_led:
+            self.status_led.set_state(DeviceState.PAIRING)
         try:
             # Stop background BT server to free up the channel
-            if bt_command_server and bt_command_server.is_running():
+            if self.bt_command_server and self.bt_command_server.is_running():
                 log.info("Stopping background Bluetooth server for pairing mode...")
-                bt_command_server.stop()
+                self.bt_command_server.stop()
                 time.sleep(1)  # Give it time to release the socket
-            
-            run_pairing_mode(config)
+
+            run_pairing_mode(self.config, led_controller=self.scheduler.led_controller if self.scheduler else None)
+        except Exception:
+            log.exception("Pairing mode failed")
         finally:
-            pairing_in_progress = False
+            self.pairing_in_progress = False
+            if self.status_led:
+                self.status_led.set_state(DeviceState.OFF)
             # Restart background BT server after pairing
-            if bt_command_server:
+            if self.bt_command_server and not self._stop_event.is_set():
                 log.info("Restarting background Bluetooth server...")
-                bt_command_server.start()
-    
-    def on_factory_reset():
-        global factory_reset_enabled, service_start_time
-        
-        # Prevent factory reset within first 60 seconds of service start
-        # This prevents accidental resets from stuck buttons or floating GPIO pins during boot
-        elapsed_since_start = time.time() - service_start_time
-        if elapsed_since_start < 60:
-            log.warning(f"Factory reset blocked - service started only {elapsed_since_start:.1f}s ago (minimum 60s required)")
-            log.warning("This prevents accidental resets during boot. Wait and try again.")
+                self.bt_command_server.start()
+
+    def _on_factory_reset(self) -> None:
+        elapsed_since_start = time.time() - self.service_start_time
+        if elapsed_since_start < FACTORY_RESET_MIN_UPTIME:
+            log.warning(f"Factory reset blocked - service started only {elapsed_since_start:.1f}s ago "
+                        f"(minimum {FACTORY_RESET_MIN_UPTIME}s required)")
             return
-        
-        if not factory_reset_enabled:
+
+        if not self.factory_reset_enabled:
             log.warning("Factory reset triggered but not yet enabled - enabling now")
             log.warning("Release button and hold again for 10s to confirm factory reset")
-            factory_reset_enabled = True
+            self.factory_reset_enabled = True
             return
-        
+
         log.warning("Button held (10s) - initiating FACTORY RESET...")
-        if factory_reset(led_controller=scheduler.led_controller if scheduler else None):
+        led = self.scheduler.led_controller if self.scheduler else None
+        if factory_reset(led_controller=led):
             log.info("Factory reset complete - rebooting...")
             subprocess.run(["sudo", "reboot"], capture_output=True)
         else:
             log.error("Factory reset failed")
-    
-    btn_config = ButtonConfig(
-        gpio_pin=config.pairing_button_pin,
-        hold_time=config.pairing_button_hold_time,
-        long_hold_time=config.factory_reset_hold_time
-    )
-    handler = ButtonHandler(config=btn_config)
-    
-    # Check initial button state before setting up callbacks
-    # This helps detect stuck buttons or floating GPIO pins
-    try:
-        import RPi.GPIO as GPIO
-        GPIO.setmode(GPIO.BCM)
-        GPIO.setup(config.pairing_button_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-        initial_state = GPIO.input(config.pairing_button_pin)
-        if initial_state == GPIO.LOW:  # Button pressed at startup
-            log.warning(f"WARNING: Button on GPIO {config.pairing_button_pin} is PRESSED at startup!")
-            log.warning("This may indicate a stuck button or floating GPIO pin.")
-            log.warning("Factory reset is DISABLED for 60 seconds to prevent accidental reset.")
+
+    def setup_button_handler(self):
+        btn_config = ButtonConfig(
+            gpio_pin=self.config.pairing_button_pin,
+            hold_time=self.config.pairing_button_hold_time,
+            long_hold_time=self.config.factory_reset_hold_time
+        )
+        handler = ButtonHandler(config=btn_config)
+
+        # Check initial button state to detect stuck buttons or floating pins
+        try:
+            import RPi.GPIO as GPIO
+            GPIO.setmode(GPIO.BCM)
+            GPIO.setup(self.config.pairing_button_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+            if GPIO.input(self.config.pairing_button_pin) == GPIO.LOW:
+                log.warning(f"WARNING: Button on GPIO {self.config.pairing_button_pin} is PRESSED at startup!")
+                log.warning("This may indicate a stuck button or floating GPIO pin.")
+                log.warning(f"Factory reset is DISABLED for {FACTORY_RESET_MIN_UPTIME} seconds to prevent accidental reset.")
+            else:
+                log.info(f"Button on GPIO {self.config.pairing_button_pin} is in normal state (released)")
+        except Exception as e:
+            log.debug(f"Could not check initial button state: {e}")
+
+        handler.set_on_hold(self._on_button_hold)
+        handler.set_on_long_hold(self._on_factory_reset)
+
+        if handler.start():
+            log.info(f"Button handler started on GPIO {self.config.pairing_button_pin}")
+            log.info(f"  - Hold {self.config.pairing_button_hold_time}s for pairing mode")
+            log.info(f"  - Hold {self.config.factory_reset_hold_time}s for factory reset")
+            log.info(f"  - Factory reset requires {FACTORY_RESET_MIN_UPTIME}s uptime + double confirmation")
+            self.button_handler = handler
         else:
-            log.info(f"Button on GPIO {config.pairing_button_pin} is in normal state (released)")
-    except Exception as e:
-        log.debug(f"Could not check initial button state: {e}")
-    
-    handler.set_on_hold(on_button_hold)
-    handler.set_on_long_hold(on_factory_reset)
-    
-    if handler.start():
-        log.info(f"Button handler started on GPIO {config.pairing_button_pin}")
-        log.info(f"  - Hold {config.pairing_button_hold_time}s for pairing mode")
-        log.info(f"  - Hold {config.factory_reset_hold_time}s for factory reset")
-        log.info(f"  - Factory reset requires 60s uptime + double confirmation")
-        return handler
-    else:
-        log.warning("Button handler could not start - pairing via button disabled")
-        return None
+            log.warning("Button handler could not start - pairing via button disabled")
+            self.button_handler = None
+        return self.button_handler
+
+    # ------------------------------------------------------------------
+    # Modes
+    # ------------------------------------------------------------------
+
+    def wait_for_wifi_setup(self) -> None:
+        """No WiFi configured: blink magenta and wait for pairing to configure it."""
+        log.warning("WiFi not configured - waiting for Bluetooth setup")
+        self.status_led.set_state(DeviceState.NO_WIFI_CONFIG)
+        self.systemd_watchdog.set_status("Waiting for WiFi configuration")
+        self.setup_button_handler()
+
+        while not self._stop_event.wait(5):
+            if is_wifi_configured():
+                log.info("WiFi now configured - restarting service to apply")
+                subprocess.run(["sudo", "systemctl", "restart", "goalstick"], capture_output=True)
+                return
+
+    def run(self) -> None:
+        self.systemd_watchdog.start()
+        self.scheduler = StickCheckScheduler(self.config)
+
+        self.status_led = StatusLED()
+        self.status_led.set_led_controller(self.scheduler.led_controller)
+        self.status_led.start()
+
+        try:
+            if not is_wifi_configured():
+                self.wait_for_wifi_setup()
+                return
+
+            self.scheduler.set_status_led(self.status_led)
+            self.setup_button_handler()
+
+            # Background Bluetooth command server for app communication
+            self.bt_command_server = BluetoothCommandServer(
+                led_controller=self.scheduler.led_controller,
+                config_store=self.scheduler.config_store
+            )
+            self.bt_command_server.start()
+            log.info("Background Bluetooth command server started")
+
+            # Network watchdog: restarts WiFi, then reboots (with a cap) if offline
+            def on_connectivity(connected: bool):
+                if connected:
+                    if self.status_led.get_state() == DeviceState.NO_NETWORK:
+                        self.status_led.set_state(DeviceState.OFF)
+                else:
+                    self.status_led.set_state(DeviceState.NO_NETWORK)
+
+            self.network_watchdog = NetworkWatchdog(on_connectivity_change=on_connectivity)
+            self.network_watchdog.start()
+
+            # Flash yellow to indicate boot sequence complete
+            if self.scheduler.led_controller and self.scheduler.led_controller.is_connected():
+                try:
+                    log.info("Boot sequence complete - flashing yellow indicator")
+                    self.scheduler.led_controller._send_command("C:AAAA00")
+                    time.sleep(2)
+                    self.scheduler.led_controller._send_command("I")
+                except Exception as e:
+                    log.warning(f"Could not send boot complete LED indicator: {e}")
+
+            self.systemd_watchdog.set_status(f"Monitoring team {self.scheduler.get_team()}")
+            if not self._stop_event.is_set():
+                self.scheduler.start()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            self.shutdown()
 
 
-def run_pairing_mode(config: SchedulerConfig) -> bool:
+def run_pairing_mode(config: SchedulerConfig, led_controller=None) -> bool:
     log.info("Entering Bluetooth pairing mode...")
-    
-    # Set up LED controller for status feedback
-    led_config = LEDConfig(
-        serial_port=config.serial_port,
-        baud_rate=config.serial_baud_rate
-    )
-    led_controller = LEDController(
-        config=led_config,
-        team_colors_path=config.team_colors_path
-    )
-    
-    # Set up Bluetooth server to receive configuration from Android app
+
+    if led_controller is None:
+        led_config = LEDConfig(
+            serial_port=config.serial_port,
+            baud_rate=config.serial_baud_rate
+        )
+        led_controller = LEDController(
+            config=led_config,
+            team_colors_path=config.team_colors_path
+        )
+
     bt_config = BluetoothServerConfig(
         device_name=config.bluetooth_device_name,
         timeout=config.bluetooth_pairing_timeout
     )
     server = BluetoothServer(config=bt_config, led_controller=led_controller)
-    
-    # Set callback to save received configuration
-    config_store = ConfigStore()
-    
+
     def on_config_received(received_config):
-        log.info(f"Received configuration - Team: {received_config.team_abbr}")
-        config_store.set_team(received_config.team_abbr)
-        
-        # TODO: Apply WiFi configuration if needed
-        # For now, just log it
-        if received_config.wifi_ssid:
-            log.info(f"WiFi SSID received: {received_config.wifi_ssid}")
-    
+        # The server has already validated and saved team/delay/WiFi.
+        log.info(f"Received configuration - Team: {received_config.team_abbr}"
+                 + (f", WiFi SSID: {received_config.wifi_ssid}" if received_config.wifi_ssid else ""))
+
     server.set_config_callback(on_config_received)
-    
-    # Start server and wait for configuration
+
     received = server.start()
-    
     if received:
         log.info("Bluetooth configuration received successfully")
         return True
-    else:
-        log.warning("Bluetooth pairing timed out or failed")
-        return False
+    log.warning("Bluetooth pairing timed out or failed")
+    return False
+
 
 def main():
-    global scheduler
-    
     parser = argparse.ArgumentParser(description="GoalStick - NHL Goal Light Controller")
-    parser.add_argument(
-        "--pair", 
-        action="store_true",
-        help="Enter Bluetooth pairing mode"
-    )
-    parser.add_argument(
-        "--team",
-        type=str,
-        help="Set team abbreviation (e.g., WSH, TOR, NYR)"
-    )
-    parser.add_argument(
-        "--show-team",
-        action="store_true",
-        help="Show currently configured team"
-    )
+    parser.add_argument("--pair", action="store_true", help="Enter Bluetooth pairing mode")
+    parser.add_argument("--team", type=str, help="Set team abbreviation (e.g., WSH, TOR, NYR)")
+    parser.add_argument("--show-team", action="store_true", help="Show currently configured team")
     args = parser.parse_args()
-    
-    # Set up signal handlers for graceful shutdown
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-    
-    # Configure scheduler
+
     config = SchedulerConfig(
         check_interval=0.5,  # Check every 0.5 seconds during live games
         daily_check_hour=8,  # Check for games at 8 AM daily
     )
-    
-    # Handle --show-team
+
     if args.show_team:
-        config_store = ConfigStore()
-        team = config_store.get_team()
-        print(f"Currently configured team: {team}")
+        print(f"Currently configured team: {ConfigStore().get_team()}")
         return
-    
-    # Handle --team to set team
+
     if args.team:
-        config_store = ConfigStore()
-        if config_store.set_team(args.team.upper()):
-            print(f"Team set to: {args.team.upper()}")
+        if ConfigStore().set_team(args.team):
+            print(f"Team set to: {args.team.strip().upper()}")
         else:
-            print("Failed to save team configuration")
+            print("Failed to save team configuration (expected a 2-3 letter abbreviation)")
             sys.exit(1)
         return
-    
-    # Handle --pair for Bluetooth pairing mode
+
     if args.pair:
-        success = run_pairing_mode(config)
-        sys.exit(0 if success else 1)
-    
-    # Normal operation - start scheduler with button support
-    global network_watchdog, status_led
-    scheduler = StickCheckScheduler(config)
-    
-    # Set up status LED using the LED strip
-    # Get the LED controller from the scheduler
-    status_led = StatusLED()
-    status_led.set_led_controller(scheduler.led_controller)
-    status_led.start()
-    
-    # Check if WiFi is configured - if not, show magenta and wait for pairing
-    if not is_wifi_configured():
-        log.warning("WiFi not configured - waiting for Bluetooth setup")
-        status_led.set_state(DeviceState.NO_WIFI_CONFIG)
-        # Don't start scheduler or network watchdog without WiFi
-        # Just wait for button press to enter pairing mode, or WiFi to be configured
-        button_handler = setup_button_handler(config)
+        watchdog = SystemdWatchdog()
+        watchdog.start()
         try:
-            while True:
-                time.sleep(5)
-                # Check if WiFi was configured (e.g., via Bluetooth pairing)
-                if is_wifi_configured():
-                    log.info("WiFi now configured - restarting service to apply")
-                    # Restart the service to pick up the new WiFi config
-                    subprocess.run(["sudo", "systemctl", "restart", "goalstick"], capture_output=True)
-                    return
-        except KeyboardInterrupt:
-            pass
+            success = run_pairing_mode(config)
         finally:
-            if button_handler:
-                button_handler.stop()
-            status_led.stop()
-        return
-    
-    # Pass status LED to scheduler for state updates
-    scheduler.set_status_led(status_led)
-    
-    # Set up button handler for pairing trigger
-    button_handler = setup_button_handler(config)
-    
-    # Start background Bluetooth command server for app communication
-    global bt_command_server
-    bt_command_server = BluetoothCommandServer(
-        led_controller=scheduler.led_controller,
-        config_store=scheduler.config_store
-    )
-    bt_command_server.start()
-    log.info("Background Bluetooth command server started")
-    
-    # Start network watchdog (reboots if no connectivity for 5 minutes)
-    network_watchdog = NetworkWatchdog()
-    network_watchdog.start()
-    
-    # Flash yellow/amber to indicate boot sequence complete
-    if scheduler.led_controller and scheduler.led_controller.is_connected():
-        try:
-            log.info("Boot sequence complete - flashing yellow indicator")
-            scheduler.led_controller._send_command("C:AAAA00")
-            time.sleep(2)  # Show yellow for 2 seconds
-            scheduler.led_controller._send_command("I")  # Turn off
-        except Exception as e:
-            log.warning(f"Could not send boot complete LED indicator: {e}")
-    
-    try:
-        scheduler.start()
-    except KeyboardInterrupt:
-        print("\nShutting down gracefully...")
-        if button_handler:
-            button_handler.stop()
-        if network_watchdog:
-            network_watchdog.stop()
-        if bt_command_server:
-            bt_command_server.stop()
-        if status_led:
-            status_led.stop()
-        scheduler.stop()
+            watchdog.stop()
+        sys.exit(0 if success else 1)
+
+    service = Service(config)
+    service.install_signal_handlers()
+    service.run()
+
 
 if __name__ == "__main__":
     main()

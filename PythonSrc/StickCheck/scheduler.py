@@ -14,13 +14,13 @@ from .auto_update import check_for_updates, update_code, run_system_updates, is_
 
 log = logging.getLogger(__name__)
 
-# Systemd watchdog support
-try:
-    import sdnotify
-    WATCHDOG_AVAILABLE = True
-except ImportError:
-    WATCHDOG_AVAILABLE = False
-    log.debug("sdnotify not available - watchdog disabled")
+# How long to pause after an unexpected error in the daily cycle before
+# trying again, so a persistent fault (e.g. API outage) does not spin.
+ERROR_BACKOFF_SECONDS = 60
+# Maximum single sleep; the wall clock is re-read between chunks so an NTP
+# step (common right after boot on a Pi with no RTC) cannot push the next
+# daily check out by a day.
+MAX_SLEEP_CHUNK_SECONDS = 60
 
 
 @dataclass
@@ -69,6 +69,9 @@ class HockeySeasonDetector:
 
 
 class StickCheckScheduler:
+    # Give up waiting for a game to start this long after its scheduled time
+    MAX_WAIT_FOR_START_MINUTES = 60
+
     def __init__(self, config: SchedulerConfig = None):
         self.config = config or SchedulerConfig()
         self.game_schedule: Optional[GameSchedule] = None
@@ -97,12 +100,9 @@ class StickCheckScheduler:
         reset_config = ResetConfig(reset_pin=self.config.esp32_reset_pin)
         self.esp32_reset = ESP32Reset(config=reset_config)
         
-        # Initialize watchdog
-        self._watchdog_notifier = None
-        self._watchdog_thread = None
-        if WATCHDOG_AVAILABLE:
-            self._watchdog_notifier = sdnotify.SystemdNotifier()
-        
+        # Wakes the sleeping main loop promptly on stop()
+        self._wake_event = threading.Event()
+
         # Status LED (set externally via set_status_led)
         self._status_led = None
     
@@ -127,12 +127,21 @@ class StickCheckScheduler:
     def get_team(self) -> str:
         return self.config.team_abbr
         
+    def _sleep(self, seconds: float) -> None:
+        """Sleep that returns early when stop() is called."""
+        if seconds > 0:
+            self._wake_event.wait(seconds)
+
     def _sleep_until_time(self, target_time: datetime) -> None:
         now = datetime.now()
-        if target_time > now:
-            sleep_seconds = (target_time - now).total_seconds()
-            log.info(f"Sleeping for {sleep_seconds:.0f} seconds until {target_time.strftime('%Y-%m-%d %H:%M:%S')}")
-            time.sleep(sleep_seconds)
+        if target_time <= now:
+            return
+        log.info(f"Sleeping for {(target_time - now).total_seconds():.0f} seconds until {target_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        while self.running:
+            remaining = (target_time - datetime.now()).total_seconds()
+            if remaining <= 0:
+                return
+            self._sleep(min(remaining, MAX_SLEEP_CHUNK_SECONDS))
     
     def _sleep_until_daily_check(self) -> None:
         now = datetime.now()
@@ -248,7 +257,7 @@ class StickCheckScheduler:
                     delay = self.config_store.get_celebration_delay()
                     if delay > 0:
                         log.info(f"Waiting {delay}s for broadcast delay...")
-                        time.sleep(delay)
+                        self._sleep(delay)
                     
                     # Trigger LED celebration
                     self.led_controller.celebrate(self.config.team_abbr)
@@ -258,7 +267,7 @@ class StickCheckScheduler:
                     log.info(f"Monitoring... (score: {self.scorekeeper.last_score})")
                 
                 if game_in_play:
-                    time.sleep(self.config.check_interval)
+                    self._sleep(self.config.check_interval)
         finally:
             # Clean up LED controller
             self.led_controller.idle()
@@ -274,18 +283,20 @@ class StickCheckScheduler:
         if not self.scorekeeper:
             return False
         
-        log.info("Waiting for game to start (checking every 30 seconds)...")
-        max_wait_minutes = 60  # Give up after 60 minutes past scheduled start
+        log.info(f"Waiting for game to start (checking every {self.config.pre_game_check_interval:.0f} seconds)...")
         checks = 0
-        max_checks = (max_wait_minutes * 60) // int(self.config.pre_game_check_interval)
-        
+        max_checks = max(1, int((self.MAX_WAIT_FOR_START_MINUTES * 60) // max(1.0, self.config.pre_game_check_interval)))
+
         while self.running and checks < max_checks:
             if self.scorekeeper.is_in_play():
                 log.info("Game has started!")
                 return True
+            if self.scorekeeper.has_ended:
+                log.info("Game is final, postponed or cancelled - nothing to monitor")
+                return False
             checks += 1
-            time.sleep(self.config.pre_game_check_interval)
-        
+            self._sleep(self.config.pre_game_check_interval)
+
         log.warning("Game did not start within expected time")
         return False
     
@@ -372,51 +383,29 @@ class StickCheckScheduler:
             log.info("No game to monitor today")
             self._sleep_until_daily_check()
     
-    def _start_watchdog(self) -> None:
-        """Start background thread to ping systemd watchdog."""
-        if not self._watchdog_notifier:
-            return
-        
-        def watchdog_loop():
-            # Notify systemd we're ready
-            self._watchdog_notifier.notify("READY=1")
-            log.info("Systemd watchdog started")
-            
-            while self.running:
-                self._watchdog_notifier.notify("WATCHDOG=1")
-                time.sleep(30)  # Ping every 30s (watchdog timeout is 60s)
-        
-        self._watchdog_thread = threading.Thread(
-            target=watchdog_loop,
-            daemon=True,
-            name="WatchdogThread"
-        )
-        self._watchdog_thread.start()
-    
-    def _stop_watchdog(self) -> None:
-        """Notify systemd we're stopping."""
-        if self._watchdog_notifier:
-            self._watchdog_notifier.notify("STOPPING=1")
-    
     def start(self) -> None:
         log.info(f"Starting StickCheck scheduler for team: {self.config.team_abbr}")
         self.running = True
-        
-        # Start watchdog thread
-        self._start_watchdog()
-        
+        self._wake_event.clear()
+
         try:
             while self.running:
-                self.run_daily_cycle()
+                try:
+                    self.run_daily_cycle()
+                except KeyboardInterrupt:
+                    raise
+                except Exception:
+                    # Never let one bad cycle (API error, serial hiccup, bad
+                    # schedule payload) take the whole service down.
+                    log.exception(f"Scheduler cycle failed - retrying in {ERROR_BACKOFF_SECONDS}s")
+                    self._sleep(ERROR_BACKOFF_SECONDS)
         except KeyboardInterrupt:
             log.info("Scheduler stopped by user")
-        except Exception as e:
-            log.error(f"Scheduler error: {e}")
         finally:
-            self._stop_watchdog()
             self.running = False
             log.info("Scheduler stopped")
-    
+
     def stop(self) -> None:
         log.info("Stopping scheduler...")
         self.running = False
+        self._wake_event.set()

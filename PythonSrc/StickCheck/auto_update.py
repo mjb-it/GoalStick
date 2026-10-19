@@ -3,6 +3,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import Optional
 
 log = logging.getLogger(__name__)
 
@@ -78,38 +79,102 @@ def enable_overlay_after_update() -> bool:
         return False
 
 
+# Only update from an HTTPS remote. The repository is public so there is no
+# credential at stake, but refusing plaintext/git:// transports prevents a
+# trivial on-path substitution of the code that will run as root.
+ALLOWED_REMOTE_PREFIXES = ("https://",)
+
+# Optional: if this file exists, every update must be signed by one of the
+# listed SSH keys (git "allowed signers" format). Create it with e.g.
+#   echo "you@example.com ssh-ed25519 AAAA..." | sudo tee /etc/goalstick/update-allowed-signers
+# and sign your commits (git config gpg.format ssh; commit.gpgsign true).
+ALLOWED_SIGNERS_FILE = Path("/etc/goalstick/update-allowed-signers")
+
+
+def _git(args: list, timeout: int = 30) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["git", *args],
+        cwd=get_install_dir(),
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+
+
+def _current_branch() -> Optional[str]:
+    result = _git(["rev-parse", "--abbrev-ref", "HEAD"])
+    if result.returncode != 0:
+        return None
+    branch = result.stdout.strip()
+    return branch if branch and branch != "HEAD" else None
+
+
+def _upstream_ref() -> Optional[str]:
+    result = _git(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip() or None
+
+
+def _remote_url_allowed() -> bool:
+    result = _git(["remote", "get-url", "origin"])
+    if result.returncode != 0:
+        log.warning("Auto-update: no 'origin' remote configured")
+        return False
+    url = result.stdout.strip()
+    if not url.startswith(ALLOWED_REMOTE_PREFIXES):
+        log.error(f"Auto-update refused: remote URL is not HTTPS ({url})")
+        return False
+    return True
+
+
+def _verify_commit_signature(ref: str) -> bool:
+    """
+    Verify `ref` is signed by an allowed signer when the allowed-signers file
+    is present. Returns True when verification is not configured.
+    """
+    if not ALLOWED_SIGNERS_FILE.exists():
+        return True
+    result = _git([
+        "-c", "gpg.format=ssh",
+        "-c", f"gpg.ssh.allowedSignersFile={ALLOWED_SIGNERS_FILE}",
+        "verify-commit", ref,
+    ])
+    if result.returncode != 0:
+        log.error(f"Auto-update refused: {ref} is not signed by an allowed key: {result.stderr.strip()}")
+        return False
+    log.info(f"Verified signature on {ref}")
+    return True
+
+
 def check_for_updates() -> bool:
     """
-    Check if there are updates available.
+    Check if there are updates available on the tracked upstream branch.
     Returns True if updates are available.
     """
-    install_dir = get_install_dir()
-    
     try:
-        # Fetch latest from remote
-        result = subprocess.run(
-            ["git", "fetch"],
-            cwd=install_dir,
-            capture_output=True,
-            text=True,
-            timeout=60
-        )
-        
-        if result.returncode != 0:
-            log.warning(f"Git fetch failed: {result.stderr}")
+        if not _remote_url_allowed():
             return False
-        
-        # Check if we're behind
-        result = subprocess.run(
-            ["git", "status", "-uno"],
-            cwd=install_dir,
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        
-        return "Your branch is behind" in result.stdout
-        
+
+        result = _git(["fetch", "--prune"], timeout=60)
+        if result.returncode != 0:
+            log.warning(f"Git fetch failed: {result.stderr.strip()}")
+            return False
+
+        upstream = _upstream_ref()
+        if not upstream:
+            log.warning("Auto-update: current branch has no upstream")
+            return False
+
+        # Behind if upstream has commits that HEAD does not.
+        result = _git(["rev-list", "--count", f"HEAD..{upstream}"])
+        if result.returncode != 0:
+            return False
+        behind = int(result.stdout.strip() or "0")
+        if behind:
+            log.info(f"Auto-update: {behind} new commit(s) available on {upstream}")
+        return behind > 0
+
     except Exception as e:
         log.error(f"Error checking for updates: {e}")
         return False
@@ -117,34 +182,45 @@ def check_for_updates() -> bool:
 
 def update_code() -> bool:
     """
-    Pull latest code and reinstall package.
+    Fast-forward to the upstream branch and reinstall the package.
     Returns True if successful.
     """
     install_dir = get_install_dir()
     venv_pip = install_dir / ".venv" / "bin" / "pip"
-    
+
     try:
-        log.info("Pulling latest code...")
-        
-        # Git pull
-        result = subprocess.run(
-            ["git", "pull", "--ff-only"],
-            cwd=install_dir,
-            capture_output=True,
-            text=True,
-            timeout=120
-        )
-        
-        if result.returncode != 0:
-            log.error(f"Git pull failed: {result.stderr}")
+        if not _remote_url_allowed():
             return False
-        
-        if "Already up to date" in result.stdout:
+
+        upstream = _upstream_ref()
+        if not upstream:
+            log.error("Auto-update: current branch has no upstream")
+            return False
+
+        before = _git(["rev-parse", "HEAD"]).stdout.strip()
+        target = _git(["rev-parse", upstream]).stdout.strip()
+        if not target:
+            log.error("Auto-update: could not resolve upstream commit")
+            return False
+
+        if before == target:
             log.info("Code is already up to date")
             return True
-        
-        log.info(f"Updated: {result.stdout.strip()}")
-        
+
+        if not _verify_commit_signature(target):
+            return False
+
+        # Refuse anything that is not a pure fast-forward of our history.
+        if _git(["merge-base", "--is-ancestor", "HEAD", target]).returncode != 0:
+            log.error("Auto-update refused: upstream history has diverged (not a fast-forward)")
+            return False
+
+        log.info(f"Updating {before[:10]} -> {target[:10]} from {upstream}")
+        result = _git(["merge", "--ff-only", target], timeout=120)
+        if result.returncode != 0:
+            log.error(f"Git fast-forward failed: {result.stderr.strip()}")
+            return False
+
         # Reinstall package to pick up any dependency changes
         log.info("Reinstalling package...")
         result = subprocess.run(
@@ -154,14 +230,14 @@ def update_code() -> bool:
             text=True,
             timeout=300
         )
-        
+
         if result.returncode != 0:
             log.error(f"Pip install failed: {result.stderr}")
             return False
-        
+
         log.info("Code update complete!")
         return True
-        
+
     except Exception as e:
         log.error(f"Error updating code: {e}")
         return False

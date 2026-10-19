@@ -22,7 +22,7 @@ class TestSchedulerConfig:
         assert config.serial_port == "/dev/serial0"
         assert config.serial_baud_rate == 115200
         assert config.team_colors_path is None
-        assert config.bluetooth_device_name == "GoalStick"
+        assert config.bluetooth_device_name is None  # hostname is used at runtime
         assert config.bluetooth_pairing_timeout == 180
         assert config.pairing_button_pin == 17
         assert config.pairing_button_hold_time == 3.0

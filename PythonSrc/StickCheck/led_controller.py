@@ -1,6 +1,7 @@
 import serial
 import json
 import logging
+import threading
 from pathlib import Path
 from typing import List, Optional
 from dataclasses import dataclass
@@ -20,6 +21,9 @@ class LEDController:
         self.config = config or LEDConfig()
         self._serial: Optional[serial.Serial] = None
         self._team_colors: dict = {}
+        # Several threads (scheduler, status LED, Bluetooth server) share this
+        # controller; serialize every access to the port.
+        self._lock = threading.RLock()
         self._load_team_colors(team_colors_path)
     
     def _load_team_colors(self, path: str = None) -> None:
@@ -41,6 +45,12 @@ class LEDController:
             self._team_colors = {}
     
     def connect(self) -> bool:
+        with self._lock:
+            return self._connect_locked()
+
+    def _connect_locked(self) -> bool:
+        if self.is_connected():
+            return True
         try:
             self._serial = serial.Serial(
                 port=self.config.serial_port,
@@ -57,13 +67,21 @@ class LEDController:
             return False
     
     def disconnect(self) -> None:
-        if self._serial and self._serial.is_open:
-            self._serial.close()
-            log.info("Disconnected from ESP32")
+        with self._lock:
+            if self._serial and self._serial.is_open:
+                try:
+                    self._serial.close()
+                except Exception as e:
+                    log.debug(f"Error closing serial port: {e}")
+                log.info("Disconnected from ESP32")
     
     def is_connected(self) -> bool:
         return self._serial is not None and self._serial.is_open
     
+    def known_teams(self) -> List[str]:
+        """Team abbreviations we have colors for (empty if the colors file failed to load)."""
+        return sorted(self._team_colors.keys())
+
     def get_team_colors(self, team_abbr: str) -> List[str]:
         colors = self._team_colors.get(team_abbr.upper(), [])
         if not colors:
@@ -112,11 +130,15 @@ class LEDController:
         return self._send_command("I")
     
     def ping(self, timeout: float = 2.0) -> bool:
+        with self._lock:
+            return self._ping_locked(timeout)
+
+    def _ping_locked(self, timeout: float) -> bool:
         if not self.is_connected():
             log.warning("Not connected to ESP32, attempting to connect...")
-            if not self.connect():
+            if not self._connect_locked():
                 return False
-        
+
         try:
             # Clear any pending data in buffer (ESP32 boot messages)
             self._serial.reset_input_buffer()
