@@ -220,8 +220,11 @@ class BluetoothManager(private val context: Context) {
 
         val socket = openSocket(device)
         if (socket == null) {
+            // The background server is always listening; the button is only
+            // for WiFi setup. Do not send people into pairing mode (or Android
+            // settings) for a plain connection failure.
             _connectionState.value = ConnectionState.Error(
-                "GoalStick not ready. Hold its button for 3 seconds to enter pairing mode, then retry."
+                "Couldn't reach GoalStick. Make sure it is powered on and nearby, then tap Reconnect or Scan."
             )
             return@withContext false
         }

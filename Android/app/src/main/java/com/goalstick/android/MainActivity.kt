@@ -121,7 +121,9 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         updateReconnectButton()
-        // Try the last GoalStick once per launch, when idle.
+        // Try the last GoalStick once per launch, when idle. The stick is
+        // always discoverable, so if it cannot be reached directly fall back
+        // to a scan rather than leaving the user at an error.
         if (!autoConnectAttempted &&
             viewModel.bluetoothManager.connectionState.value is BluetoothManager.ConnectionState.Disconnected &&
             !viewModel.isConnectInFlight()
@@ -129,7 +131,7 @@ class MainActivity : AppCompatActivity() {
             autoConnectAttempted = true
             val remembered = viewModel.bluetoothManager.getRememberedDevice()
             if (remembered != null && viewModel.bluetoothManager.isBluetoothEnabled()) {
-                connectTo(remembered, autoScanOnFailure = false)
+                connectTo(remembered, autoScanOnFailure = true)
             } else {
                 statusText.text = getString(R.string.status_idle)
             }

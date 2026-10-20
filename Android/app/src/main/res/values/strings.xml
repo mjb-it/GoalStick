@@ -7,7 +7,7 @@
     <string name="status_connecting">Connecting…</string>
     <string name="status_connected">Connected! Configure your GoalStick below.</string>
     <string name="status_disconnected">Disconnected from GoalStick.</string>
-    <string name="status_no_devices">No GoalStick found. Hold its button for 3 seconds until the light blinks blue, then scan again.</string>
+    <string name="status_no_devices">No GoalStick found. Make sure it is powered on and nearby, then scan again.</string>
     <string name="status_pick_device">Select your GoalStick from the list.</string>
     <string name="ip_address">IP: %1$s</string>
     <string name="delay_value">%1$ds</string>
