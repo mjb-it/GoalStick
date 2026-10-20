@@ -58,7 +58,9 @@ The LED strip is used for status indication. No separate status LED needed.
 | Off | - | Normal operation |
 | Yellow | Solid | Booting |
 | Magenta | Slow blink | WiFi not configured (needs setup) |
-| Blue | Slow blink | Bluetooth pairing mode |
+| Blue | Slow blink | Bluetooth pairing mode - waiting for the app to connect |
+| Green | Flash, then off | App connected - pairing complete (no configuration needed) |
+| Red | Flash, then off | Pairing timed out - nothing connected |
 | Cyan | Slow blink | Updating |
 | Red | Solid | Error |
 | Red | Fast blink | No network connectivity |

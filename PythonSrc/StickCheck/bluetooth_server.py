@@ -6,6 +6,7 @@ Two servers share one implementation:
 * `BluetoothServer` - pairing mode. Started by a physical button hold (or
   `main.py --pair`). The adapter is made discoverable for a limited time and
   WiFi credentials are accepted. This is the only path that can change WiFi.
+  Pairing is complete as soon as the app connects; nothing has to be sent.
 * `BluetoothCommandServer` - background mode. Runs while the service is up so
   the app can read config, change team/delay and fire a test celebration.
   WiFi changes are refused here.
@@ -463,27 +464,89 @@ def _serve_client(client_socket: socket.socket, handler: CommandHandler,
 # ---------------------------------------------------------------------------
 
 class BluetoothServer:
-    """Bluetooth RFCOMM server for receiving configuration from the Android app."""
+    """
+    Bluetooth RFCOMM server for pairing mode.
 
-    DATA_TIMEOUT = 300  # Seconds a connected client may stay idle
+    The server owns the LED strip while it runs:
+
+    * blue blink  - discoverable, waiting for the app to connect
+    * green flash - the app connected (pairing complete); strip then goes dark
+    * red flash   - nothing connected before the timeout
+
+    Pairing is complete the moment the app connects. The connection is then
+    served (config, get_config, test_goal) with the strip dark, and pairing
+    mode ends when the app disconnects.
+    """
+
+    DATA_TIMEOUT = 300      # Seconds a connected client may stay idle
+    BLINK_PERIOD = 1.0      # Seconds on / off for the waiting blink
+    FLASH_SECONDS = 2.0     # How long the paired / timeout flash is shown
 
     def __init__(self, config: BluetoothServerConfig = None, led_controller=None):
         self.config = config or BluetoothServerConfig()
         if self.config.device_name is None:
             self.config.device_name = socket.gethostname()
         self.led_controller = led_controller
+        self.paired = False
+        self.last_received_config: Optional[ReceivedConfig] = None
         self._running = False
         self._server_socket: Optional[socket.socket] = None
         self._client_socket: Optional[socket.socket] = None
         self._on_config_received: Optional[Callable[[ReceivedConfig], None]] = None
+        self._blink_stop = threading.Event()
+        self._blink_thread: Optional[threading.Thread] = None
+        self._flash_timer: Optional[threading.Timer] = None
 
     def set_config_callback(self, callback: Callable[[ReceivedConfig], None]) -> None:
         """Set callback to be called when configuration is received."""
         self._on_config_received = callback
 
+    # --- LED strip -------------------------------------------------------
+
     def _send_led_status(self, colors: list) -> None:
         if self.led_controller and self.led_controller.is_connected():
             self.led_controller._send_command("C:" + ",".join(colors))
+
+    def _led_off(self) -> None:
+        if self.led_controller and self.led_controller.is_connected():
+            self.led_controller._send_command("I")
+
+    def _blink_loop(self) -> None:
+        # start() sends the first blue synchronously; alternate from there.
+        while not self._blink_stop.wait(self.BLINK_PERIOD):
+            self._led_off()
+            if self._blink_stop.wait(self.BLINK_PERIOD):
+                break
+            self._send_led_status(["0000FF"])
+
+    def _start_waiting_blink(self) -> None:
+        self._blink_stop.clear()
+        self._send_led_status(["0000FF"])
+        self._blink_thread = threading.Thread(
+            target=self._blink_loop, daemon=True, name="PairingBlink")
+        self._blink_thread.start()
+
+    def _stop_waiting_blink(self) -> None:
+        self._blink_stop.set()
+        if self._blink_thread and self._blink_thread.is_alive():
+            self._blink_thread.join(timeout=2.0)
+        self._blink_thread = None
+
+    def _flash_paired(self) -> None:
+        """Green flash that turns itself off; does not block serving the app."""
+        self._stop_waiting_blink()
+        self._send_led_status(["00FF00"])
+        self._flash_timer = threading.Timer(self.FLASH_SECONDS, self._led_off)
+        self._flash_timer.daemon = True
+        self._flash_timer.start()
+
+    def _flash_failed(self) -> None:
+        self._stop_waiting_blink()
+        self._send_led_status(["FF0000"])
+        time.sleep(self.FLASH_SECONDS)
+        self._led_off()
+
+    # --- lifecycle -------------------------------------------------------
 
     def _setup_bluetooth(self) -> bool:
         """Configure the adapter for pairing: up, named, discoverable."""
@@ -501,15 +564,18 @@ class BluetoothServer:
             log.warning(f"Bluetooth may not be fully discoverable. hciconfig output: {output}")
         return True
 
-    def start(self) -> Optional[ReceivedConfig]:
+    def start(self) -> bool:
         """
-        Start the pairing server and wait for configuration.
+        Run pairing mode until the app connects and later disconnects, or until
+        `config.timeout` elapses with no connection.
 
-        Clients are accepted until `config.timeout` elapses. Returns the last
-        configuration received, or None if none arrived.
+        Returns True if a client connected (pairing complete). Any configuration
+        the client sent is left in `last_received_config`.
         """
         log.info("Starting Bluetooth configuration server")
         self._running = True
+        self.paired = False
+        self.last_received_config = None
 
         if self.led_controller:
             self.led_controller.connect()
@@ -524,11 +590,11 @@ class BluetoothServer:
         try:
             self._setup_bluetooth()
             _register_sdp_service(self.config.channel)
-            self._send_led_status(["0000FF"])  # Blue - waiting for connection
 
             deadline = time.monotonic() + self.config.timeout
             self._server_socket = _create_server_socket(self.config.channel, accept_timeout=5)
             log.info(f"Listening for Bluetooth connections on channel {self.config.channel}")
+            self._start_waiting_blink()
 
             while self._running and time.monotonic() < deadline:
                 try:
@@ -536,8 +602,9 @@ class BluetoothServer:
                 except socket.timeout:
                     continue
 
-                log.info(f"Connected to {client_info}")
-                self._send_led_status(["00FFFF"])  # Cyan - connected
+                log.info(f"Paired with {client_info}")
+                self.paired = True
+                self._flash_paired()
                 try:
                     _serve_client(self._client_socket, handler, self.DATA_TIMEOUT, lambda: self._running)
                 finally:
@@ -547,25 +614,28 @@ class BluetoothServer:
                         pass
                     self._client_socket = None
 
-                if handler.last_received_config is not None:
-                    self._send_led_status(["00FF00"])  # Green - success
-                    return handler.last_received_config
-                self._send_led_status(["0000FF"])  # Back to waiting
+                self.last_received_config = handler.last_received_config
+                log.info("Pairing client disconnected - leaving pairing mode")
+                return True
 
             if self._running:
                 log.warning("Timeout waiting for Bluetooth connection")
-                self._send_led_status(["FF0000"])  # Red for timeout
-            return handler.last_received_config
+                self._flash_failed()
+            return False
 
         except Exception as e:
             log.error(f"Bluetooth server error: {e}")
-            self._send_led_status(["FF0000"])
-            return None
+            self._flash_failed()
+            return False
         finally:
             self._cleanup()
 
     def _cleanup(self) -> None:
         self._running = False
+        self._stop_waiting_blink()
+        if self._flash_timer:
+            self._flash_timer.cancel()
+            self._flash_timer = None
         for attr in ("_client_socket", "_server_socket"):
             sock = getattr(self, attr)
             if sock:
@@ -577,8 +647,6 @@ class BluetoothServer:
 
         _set_scan_mode(discoverable=False)
 
-        # Give time for the LED animation
-        time.sleep(2)
         if self.led_controller:
             self.led_controller.idle()
 

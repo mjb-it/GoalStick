@@ -1,4 +1,5 @@
 import json
+import socket
 import sys
 from unittest.mock import MagicMock
 
@@ -7,10 +8,13 @@ import pytest
 # Mock nhlpy before any StickCheck imports
 sys.modules['nhlpy'] = MagicMock()
 
+import StickCheck.bluetooth_server as bluetooth_server
 from StickCheck.bluetooth_server import (
     MessageFramer,
     FramingError,
     CommandHandler,
+    BluetoothServer,
+    BluetoothServerConfig,
     encode_response,
     TEST_GOAL_MIN_INTERVAL,
 )
@@ -245,3 +249,108 @@ class TestCommandHandler:
         led.celebrate.side_effect = RuntimeError("serial exploded")
         resp = handler.handle({"type": "test_goal"})
         assert resp["status"] == "error"
+
+
+# ---------------------------------------------------------------------------
+# Pairing-mode server
+# ---------------------------------------------------------------------------
+
+class FakeClientSocket:
+    """A client that sends the given chunks, then hangs up."""
+
+    def __init__(self, chunks=()):
+        self.chunks = list(chunks)
+        self.sent = b""
+
+    def settimeout(self, _timeout):
+        pass
+
+    def recv(self, _n):
+        return self.chunks.pop(0) if self.chunks else b""
+
+    def sendall(self, data):
+        self.sent += data
+
+    def close(self):
+        pass
+
+
+class FakeServerSocket:
+    """Hands out one client, then behaves like an idle listening socket."""
+
+    def __init__(self, client=None):
+        self.client = client
+
+    def accept(self):
+        if self.client is None:
+            raise socket.timeout()
+        client, self.client = self.client, None
+        return client, ("AA:BB:CC:DD:EE:FF", 1)
+
+    def close(self):
+        pass
+
+
+def led_commands(led):
+    return [c.args[0] for c in led._send_command.call_args_list]
+
+
+@pytest.fixture
+def pairing_env(monkeypatch, store, led):
+    """Stub out the adapter, SDP and sockets so BluetoothServer.start() can run."""
+    led.is_connected.return_value = True
+    monkeypatch.setattr(BluetoothServer, "_setup_bluetooth", lambda self: True)
+    monkeypatch.setattr(BluetoothServer, "FLASH_SECONDS", 0)
+    monkeypatch.setattr(bluetooth_server, "_register_sdp_service", lambda channel: None)
+    monkeypatch.setattr(bluetooth_server, "_set_scan_mode", lambda discoverable: None)
+    monkeypatch.setattr(bluetooth_server, "ConfigStore", lambda: store)
+
+    def make(client=None, timeout=5):
+        fake = FakeServerSocket(client)
+        monkeypatch.setattr(bluetooth_server, "_create_server_socket",
+                            lambda channel, accept_timeout: fake)
+        return BluetoothServer(BluetoothServerConfig(device_name="test", timeout=timeout),
+                               led_controller=led)
+
+    return make
+
+
+class TestPairingServer:
+
+    def test_connection_alone_completes_pairing(self, pairing_env, led):
+        server = pairing_env(client=FakeClientSocket())
+
+        assert server.start() is True
+
+        assert server.paired is True
+        assert server.last_received_config is None
+        cmds = led_commands(led)
+        assert cmds[0] == "C:0000FF", "blue while waiting"
+        assert "C:00FF00" in cmds, "green once the app connects"
+        assert cmds.index("C:00FF00") > cmds.index("C:0000FF")
+        assert "C:00FFFF" not in cmds, "no separate 'connected' colour"
+        led.idle.assert_called()  # strip ends dark
+        assert server._blink_thread is None
+
+    def test_config_sent_during_pairing_is_kept(self, pairing_env, led, store):
+        client = FakeClientSocket([encode_response({"type": "config", "team_abbr": "TOR"})])
+        server = pairing_env(client=client)
+
+        assert server.start() is True
+
+        assert server.last_received_config.team_abbr == "TOR"
+        assert store.get_team() == "TOR"
+        assert json.loads(client.sent.decode().strip())["status"] == "ok"
+
+    def test_timeout_without_connection_flashes_red(self, pairing_env, led):
+        server = pairing_env(client=None, timeout=0.05)
+
+        assert server.start() is False
+
+        assert server.paired is False
+        cmds = led_commands(led)
+        assert cmds[0] == "C:0000FF"
+        assert "C:FF0000" in cmds
+        assert "C:00FF00" not in cmds
+        led.idle.assert_called()
+        assert server._blink_thread is None

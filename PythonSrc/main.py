@@ -129,14 +129,18 @@ class Service:
 
         self.pairing_in_progress = True
         log.info("Button held (3s) - initiating Bluetooth pairing...")
+        # The pairing server drives the strip itself (blue blink while waiting,
+        # green flash once the app connects). Park the status LED so its blink
+        # thread cannot overwrite those colours.
         if self.status_led:
-            self.status_led.set_state(DeviceState.PAIRING)
+            self.status_led.set_state(DeviceState.OFF)
         try:
             # Stop background BT server to free up the channel
             if self.bt_command_server and self.bt_command_server.is_running():
                 log.info("Stopping background Bluetooth server for pairing mode...")
                 self.bt_command_server.stop()
-                time.sleep(1)  # Give it time to release the socket
+            # Let the socket close and any in-flight status LED pattern finish
+            time.sleep(1)
 
             run_pairing_mode(self.config, led_controller=self.scheduler.led_controller if self.scheduler else None)
         except Exception:
@@ -144,7 +148,9 @@ class Service:
         finally:
             self.pairing_in_progress = False
             if self.status_led:
-                self.status_led.set_state(DeviceState.OFF)
+                # Resume the magenta "needs WiFi" blink if we are still unconfigured
+                self.status_led.set_state(
+                    DeviceState.OFF if is_wifi_configured() else DeviceState.NO_WIFI_CONFIG)
             # Restart background BT server after pairing
             if self.bt_command_server and not self._stop_event.is_set():
                 log.info("Restarting background Bluetooth server...")
@@ -304,9 +310,10 @@ def run_pairing_mode(config: SchedulerConfig, led_controller=None) -> bool:
 
     server.set_config_callback(on_config_received)
 
-    received = server.start()
-    if received:
-        log.info("Bluetooth configuration received successfully")
+    paired = server.start()
+    if paired:
+        log.info("Bluetooth pairing complete"
+                 + ("" if server.last_received_config else " (no configuration sent)"))
         return True
     log.warning("Bluetooth pairing timed out or failed")
     return False

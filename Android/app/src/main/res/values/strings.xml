@@ -24,7 +24,7 @@
     <string name="section_wifi">WiFi Configuration</string>
     <string name="hint_ssid">WiFi Network Name (SSID)</string>
     <string name="hint_password">WiFi Password</string>
-    <string name="wifi_help">WiFi is only changed when a password is entered, and only while GoalStick is in pairing mode (blue blinking light). Leave the password empty to keep the current network.</string>
+    <string name="wifi_help">WiFi is only changed when a password is entered, and only on the connection made right after holding the GoalStick button (its light blinks blue, then flashes green when the app connects). Leave the password empty to keep the current network.</string>
     <string name="section_team">Select Your Team</string>
     <string name="section_delay">Broadcast Delay (seconds)</string>
     <string name="delay_help">Delay the light celebration to sync with your TV broadcast</string>
