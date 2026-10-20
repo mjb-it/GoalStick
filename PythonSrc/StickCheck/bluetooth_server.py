@@ -386,7 +386,9 @@ def clear_paired_devices() -> bool:
 
     Returns False if the bonded devices could not be listed.
     """
-    ok, output = _run_command(["bluetoothctl", "paired-devices"])
+    # `paired-devices` was removed in BlueZ 5.65; `devices Paired` is what
+    # the Pi's 5.82 accepts. Output lines are "Device <addr> <name>".
+    ok, output = _run_command(["bluetoothctl", "devices", "Paired"])
     if not ok:
         log.warning(f"Could not list paired devices: {output.strip()}")
         return False

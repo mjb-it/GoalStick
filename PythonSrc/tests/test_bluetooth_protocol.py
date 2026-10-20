@@ -392,8 +392,12 @@ def bluetoothctl(monkeypatch):
 
     def fake_run(cmd, timeout=10):
         state["commands"].append(cmd)
-        if cmd[:2] == ["bluetoothctl", "paired-devices"]:
+        # BlueZ >= 5.65 dropped `paired-devices`; `devices Paired` is the
+        # replacement and what the Pi's 5.82 understands.
+        if cmd == ["bluetoothctl", "devices", "Paired"]:
             return state["listing"]
+        if cmd[:2] == ["bluetoothctl", "paired-devices"]:
+            return False, "Invalid command in menu main: paired-devices"
         return True, ""
 
     monkeypatch.setattr(bluetooth_server, "_run_command", fake_run)
