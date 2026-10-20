@@ -33,6 +33,7 @@ operations and validates everything it receives.
 import json
 import logging
 import socket
+import re
 import struct
 import subprocess
 import threading
@@ -369,6 +370,34 @@ def _set_device_name(name: str) -> None:
     _run_command(["sudo", "hciconfig", "hci0", "name", name])
 
 
+# Bluetooth device addresses: six colon-separated hex octets.
+_BT_ADDR_RE = re.compile(r"^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$")
+
+
+def clear_paired_devices() -> bool:
+    """
+    Remove every bonded device from the adapter.
+
+    The app never bonds (insecure RFCOMM, BT_SECURITY_LOW), so bonds only
+    appear when someone pairs the stick from the phone's Bluetooth settings.
+    Once such a bond goes stale on the phone, the controller rejects that
+    phone at the link layer ("incorrect PIN or passkey") before our socket
+    ever sees it. Pairing mode therefore starts from an empty bond list.
+
+    Returns False if the bonded devices could not be listed.
+    """
+    ok, output = _run_command(["bluetoothctl", "paired-devices"])
+    if not ok:
+        log.warning(f"Could not list paired devices: {output.strip()}")
+        return False
+    for line in output.splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and parts[0] == "Device" and _BT_ADDR_RE.match(parts[1]):
+            log.info(f"Removing stale bond for {parts[1]}")
+            _run_command(["bluetoothctl", "remove", parts[1]])
+    return True
+
+
 def _set_device_class() -> None:
     # "Computer - Uncategorized" with NO service classes so Android does not
     # treat us as an audio device.
@@ -588,6 +617,7 @@ class BluetoothServer:
         )
 
         try:
+            clear_paired_devices()
             self._setup_bluetooth()
             _register_sdp_service(self.config.channel)
 

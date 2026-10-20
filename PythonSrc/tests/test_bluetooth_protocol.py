@@ -303,6 +303,7 @@ def pairing_env(monkeypatch, store, led):
     monkeypatch.setattr(BluetoothServer, "FLASH_SECONDS", 0)
     monkeypatch.setattr(bluetooth_server, "_register_sdp_service", lambda channel: None)
     monkeypatch.setattr(bluetooth_server, "_set_scan_mode", lambda discoverable: None)
+    monkeypatch.setattr(bluetooth_server, "clear_paired_devices", lambda: True, raising=False)
     monkeypatch.setattr(bluetooth_server, "ConfigStore", lambda: store)
 
     def make(client=None, timeout=5):
@@ -354,3 +355,85 @@ class TestPairingServer:
         assert "C:00FF00" not in cmds
         led.idle.assert_called()
         assert server._blink_thread is None
+
+    def test_bonds_are_cleared_before_listening(self, pairing_env, monkeypatch):
+        """A stale bond makes the controller reject the phone before our socket
+        ever sees it, so pairing mode must start from an empty bond list."""
+        events = []
+        monkeypatch.setattr(bluetooth_server, "clear_paired_devices",
+                            lambda: events.append("clear") or True)
+        server = pairing_env(client=FakeClientSocket())
+        real_create = bluetooth_server._create_server_socket
+        monkeypatch.setattr(bluetooth_server, "_create_server_socket",
+                            lambda channel, accept_timeout: events.append("listen")
+                            or real_create(channel, accept_timeout))
+
+        assert server.start() is True
+
+        assert events == ["clear", "listen"]
+
+    def test_pairing_proceeds_when_clearing_bonds_fails(self, pairing_env, monkeypatch):
+        monkeypatch.setattr(bluetooth_server, "clear_paired_devices", lambda: False)
+        server = pairing_env(client=FakeClientSocket())
+
+        assert server.start() is True
+        assert server.paired is True
+
+
+# ---------------------------------------------------------------------------
+# clear_paired_devices
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def bluetoothctl(monkeypatch):
+    """Fake _run_command: returns the given `paired-devices` output and records
+    every command issued."""
+    state = {"listing": (True, ""), "commands": []}
+
+    def fake_run(cmd, timeout=10):
+        state["commands"].append(cmd)
+        if cmd[:2] == ["bluetoothctl", "paired-devices"]:
+            return state["listing"]
+        return True, ""
+
+    monkeypatch.setattr(bluetooth_server, "_run_command", fake_run)
+    return state
+
+
+def removed(state):
+    return [c[2] for c in state["commands"] if c[:2] == ["bluetoothctl", "remove"]]
+
+
+class TestClearPairedDevices:
+
+    def test_removes_every_bonded_device(self, bluetoothctl):
+        bluetoothctl["listing"] = (True, "Device 64:9D:38:D5:6E:71 Pixel 10 Pro Fold\n"
+                                         "Device AA:BB:CC:DD:EE:FF Other phone\n")
+
+        assert bluetooth_server.clear_paired_devices() is True
+
+        assert removed(bluetoothctl) == ["64:9D:38:D5:6E:71", "AA:BB:CC:DD:EE:FF"]
+
+    def test_nothing_bonded_is_a_no_op(self, bluetoothctl):
+        bluetoothctl["listing"] = (True, "")
+
+        assert bluetooth_server.clear_paired_devices() is True
+
+        assert removed(bluetoothctl) == []
+
+    def test_only_well_formed_addresses_are_removed(self, bluetoothctl):
+        bluetoothctl["listing"] = (True, "Device 64:9D:38:D5:6E:71 Pixel\n"
+                                         "Device notanaddress Bogus\n"
+                                         "Agent registered\n"
+                                         "Device\n")
+
+        bluetooth_server.clear_paired_devices()
+
+        assert removed(bluetoothctl) == ["64:9D:38:D5:6E:71"]
+
+    def test_listing_failure_returns_false_without_removing(self, bluetoothctl):
+        bluetoothctl["listing"] = (False, "Failed to connect to bluetoothd")
+
+        assert bluetooth_server.clear_paired_devices() is False
+
+        assert removed(bluetoothctl) == []

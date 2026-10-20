@@ -293,6 +293,11 @@ Two servers share this protocol:
 - **Pairing mode** (button hold 3s or `main.py --pair`): adapter is
   discoverable for 3 minutes and WiFi credentials are accepted. This is the
   only path that can change WiFi, so physical access to the button is the gate.
+  All bonded devices are removed first: the app never bonds, so a bond only
+  exists if someone paired the stick from Android's Bluetooth settings, and a
+  stale one makes the controller reject that phone ("incorrect PIN or
+  passkey") before the server ever sees it. Connect through the app; do not
+  pair in Android settings.
 - **Background server** (always on): accepts `ping`, `get_config`,
   `test_goal` and team/delay changes. WiFi fields are refused.
 

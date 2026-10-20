@@ -5,6 +5,7 @@ import subprocess
 import time
 from pathlib import Path
 
+from .bluetooth_server import clear_paired_devices
 from .system_files import remove_system_path
 from .wifi_config import clear_wpa_supplicant_networks, WPA_SUPPLICANT_CONF
 
@@ -67,30 +68,7 @@ def _clear_bluetooth_pairings() -> bool:
     try:
         log.info("Clearing Bluetooth pairings...")
 
-        # Get list of paired devices
-        result = subprocess.run(
-            ["bluetoothctl", "paired-devices"],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-
-        if result.returncode != 0:
-            log.warning("Could not list paired devices")
-        else:
-            # Parse device addresses and remove each one
-            for line in result.stdout.strip().split('\n'):
-                if line.startswith("Device "):
-                    parts = line.split()
-                    if len(parts) >= 2 and _is_bt_address_name(parts[1]):
-                        mac_address = parts[1]
-                        log.info(f"Removing paired device: {mac_address}")
-                        subprocess.run(
-                            ["bluetoothctl", "remove", mac_address],
-                            capture_output=True,
-                            text=True,
-                            timeout=10
-                        )
+        clear_paired_devices()
 
         # Also clear BlueZ's on-disk cache so pairings are truly gone even if
         # bluetoothctl failed. Only real (non-symlink) directories whose names
