@@ -393,9 +393,11 @@ class TestEnsureAdapterUp:
         asked to keep bond-free and drops the ACL before RFCOMM comes up.
         GoalStick is classic-only, so LE is switched off at every start."""
         commands = []
+        stdin_for = {}
 
-        def fake_run(cmd, timeout=10):
+        def fake_run(cmd, timeout=10, input=None):
             commands.append(cmd)
+            stdin_for[tuple(cmd)] = input
             if cmd == ["hciconfig", "hci0"]:
                 return True, "hci0:\tType: Primary  Bus: UART\n\tUP RUNNING PSCAN\n"
             return True, ""
@@ -410,6 +412,9 @@ class TestEnsureAdapterUp:
         # Only after the adapter is confirmed up, so the power-on sequence
         # cannot switch LE back on behind us.
         assert commands.index(le_off) > commands.index(["hciconfig", "hci0"])
+        # btmgmt never returns when stdin is at EOF (as it is under systemd);
+        # it needs a line on stdin. Observed on BlueZ 5.82.
+        assert stdin_for[tuple(le_off)] == "\n"
 
 
 # ---------------------------------------------------------------------------

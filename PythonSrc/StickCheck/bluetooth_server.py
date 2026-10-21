@@ -327,9 +327,9 @@ class CommandHandler:
 # Adapter helpers (shared)
 # ---------------------------------------------------------------------------
 
-def _run_command(cmd: list, timeout: int = 10) -> Tuple[bool, str]:
+def _run_command(cmd: list, timeout: int = 10, input: Optional[str] = None) -> Tuple[bool, str]:
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, input=input)
         return result.returncode == 0, result.stdout + result.stderr
     except subprocess.TimeoutExpired:
         return False, "Command timed out"
@@ -352,8 +352,10 @@ def _ensure_adapter_up(attempts: int = 3) -> bool:
             # non-bonding Just Works pairing with a BR/EDR SMP request
             # (cross-transport key derivation); Android treats that as a
             # bonding attempt and drops the link before RFCOMM comes up.
-            # Runtime setting, so it is re-applied at every start.
-            ok, output = _run_command(["sudo", "btmgmt", "le", "off"])
+            # Runtime setting, so it is re-applied at every start. btmgmt
+            # never exits when stdin is already at EOF (as under systemd);
+            # a line on stdin makes it return at once (BlueZ 5.82).
+            ok, output = _run_command(["sudo", "btmgmt", "le", "off"], input="\n")
             if not ok:
                 log.warning(f"Could not disable LE: {output.strip()}")
             return True
