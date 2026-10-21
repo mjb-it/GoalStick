@@ -305,6 +305,14 @@ The RFCOMM socket uses `BT_SECURITY_LOW` to match the app's insecure socket;
 on a headless Pi Just Works pairing is the only workable option. See the
 module docstring in `StickCheck/bluetooth_server.py`.
 
+The adapter runs classic (BR/EDR) only. Android completes a *non-bonding*
+Just Works pairing to encrypt the insecure link; if LE is enabled the Linux
+kernel then sends a BR/EDR SMP pairing request (cross-transport key
+derivation), which Android treats as a bonding attempt and drops the link
+before RFCOMM is up. The service runs `btmgmt le off` whenever it brings the
+adapter up, and `make deploy` writes `ControllerMode = bredr` to
+`/etc/bluetooth/main.conf`.
+
 ## Read-Only Filesystem (Optional)
 
 For production devices, you can enable a read-only root filesystem to protect the SD card from corruption due to power loss:

@@ -381,6 +381,38 @@ class TestPairingServer:
 
 
 # ---------------------------------------------------------------------------
+# _ensure_adapter_up
+# ---------------------------------------------------------------------------
+
+class TestEnsureAdapterUp:
+
+    def test_disables_le_once_adapter_is_up(self, monkeypatch):
+        """With LE enabled, the kernel follows the app's non-bonding Just Works
+        pairing with a BR/EDR SMP pairing request (cross-transport key
+        derivation). Android treats that as a bonding attempt on a link it
+        asked to keep bond-free and drops the ACL before RFCOMM comes up.
+        GoalStick is classic-only, so LE is switched off at every start."""
+        commands = []
+
+        def fake_run(cmd, timeout=10):
+            commands.append(cmd)
+            if cmd == ["hciconfig", "hci0"]:
+                return True, "hci0:\tType: Primary  Bus: UART\n\tUP RUNNING PSCAN\n"
+            return True, ""
+
+        monkeypatch.setattr(bluetooth_server, "_run_command", fake_run)
+        monkeypatch.setattr(bluetooth_server.time, "sleep", lambda _s: None)
+
+        assert bluetooth_server._ensure_adapter_up() is True
+
+        le_off = ["sudo", "btmgmt", "le", "off"]
+        assert le_off in commands
+        # Only after the adapter is confirmed up, so the power-on sequence
+        # cannot switch LE back on behind us.
+        assert commands.index(le_off) > commands.index(["hciconfig", "hci0"])
+
+
+# ---------------------------------------------------------------------------
 # clear_paired_devices
 # ---------------------------------------------------------------------------
 

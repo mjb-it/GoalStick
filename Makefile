@@ -207,12 +207,15 @@ deploy:
 	else \
 		echo "BlueZ --compat mode already enabled"; \
 	fi
-	@# Disable Bluetooth Secure Connections to allow legacy SSP pairing with Android
-	@echo "Configuring BlueZ policy (disabling Secure Connections)..."
+	@# Classic (BR/EDR) only: with LE enabled the kernel follows the app's
+	@# non-bonding Just Works pairing with a BR/EDR SMP request and Android
+	@# drops the link. The service also runs `btmgmt le off` at every start.
+	@# No audio plugins so Android does not treat GoalStick as a headset.
+	@echo "Configuring BlueZ (classic only, no audio plugins)..."
 	sudo mkdir -p /etc/bluetooth
-	@printf '[Policy]\nSecureConnections = off\n' | sudo tee /etc/bluetooth/main.conf > /dev/null
+	@printf '[General]\nControllerMode = bredr\nDisablePlugins = a2dp,avrcp\n' | sudo tee /etc/bluetooth/main.conf > /dev/null
 	sudo systemctl restart bluetooth
-	@echo "BlueZ policy configured"
+	@echo "BlueZ configured"
 	@# Create deploy directory
 	sudo mkdir -p $(DEPLOY_DIR)
 	@# Copy Python source (excluding __pycache__, .pyc, etc.)

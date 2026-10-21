@@ -348,6 +348,14 @@ def _ensure_adapter_up(attempts: int = 3) -> bool:
         _, status = _run_command(["hciconfig", "hci0"])
         if "UP RUNNING" in status:
             log.info("Bluetooth adapter is up and running")
+            # Classic only. With LE enabled the kernel answers the app's
+            # non-bonding Just Works pairing with a BR/EDR SMP request
+            # (cross-transport key derivation); Android treats that as a
+            # bonding attempt and drops the link before RFCOMM comes up.
+            # Runtime setting, so it is re-applied at every start.
+            ok, output = _run_command(["sudo", "btmgmt", "le", "off"])
+            if not ok:
+                log.warning(f"Could not disable LE: {output.strip()}")
             return True
         log.warning(f"Attempt {attempt + 1} to bring up hci0 failed, retrying...")
         time.sleep(1)
